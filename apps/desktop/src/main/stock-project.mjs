@@ -8,6 +8,7 @@ export const stockProjectInstructions=`# 股票项目
 ## 数据与工具
 
 - 工具可用性以本轮实际提供的工具清单为准，不沿用历史对话中“接口不存在”的判断。直接使用提供的工具名称及参数，不自行拼接命名空间或试探一串猜测的接口名。unsupported call 仅说明该次调用名称无效，不能据此断言没有写入能力。
+- 交易账本使用 read_position_ledger / write_position_ledger；记录买卖使用本次股数和用户给定费用，缺失则询问。重试保留 requestId 及全部参数；不猜费用、不下单。save_holding 只调整余额，不表示买卖成交。
 - 手动持仓写入工具为 save_holding：先 get_holdings 读取 revision；新记录 revision=0。quantity 是持仓总股数，用户未提供时只询问股数，不猜数量。按指定交易日价格录入时核对未复权日线。成功后读取核对，不能把本地记账称为实际成交。
 - 自选写入工具为 create_watchlist、add_watchlist_member、remove_watchlist_member、rename_watchlist。
 
@@ -20,8 +21,10 @@ export const stockProjectInstructions=`# 股票项目
 ## 项目资料
 
 - 对用户希望保留、后续需要复用的资料和分析，保存为本项目中的普通文件，按内容组织到 sources/ 或 notes/ 等清楚的目录。
+- 定时关注沿用任务会话。需要后续复用的结果保存到项目资料中，注明运行日期；失败或数据缺失如实记录，不把旧快照说成新数据。不要求用户额外浏览文件。
 - 保存分析时注明问题、数据来源及日期、主要发现和资料不足；区分原始材料、计算结果与推断。不强制输出模板。
 - 继续已有问题时先查阅相关项目资料，核对是否过期，再决定是否补充查询。
+- sources/、notes/ 中的自选或持仓记录是写入当时的材料，不是当前账户状态；回答当前自选或持仓时重新用 MCP 读取已提交数据。旧分析不自动改写，引用时保留记录日期。
 - 用户的想法可以直接写入本文件或普通 Skill；不需要创建另一套隐藏的行动指南或记忆系统。
 `;
 

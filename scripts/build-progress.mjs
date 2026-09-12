@@ -5,8 +5,9 @@ import vm from 'node:vm';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const docs=path.join(root,'docs');
-const round2=!process.argv.includes('--round1');
-const planFile=round2?'round2-plan.json':'mvp-plan.json';
+const round=process.argv.includes('--round1')?1:process.argv.includes('--round2')?2:3;
+const round2=round===2,round3=round===3;
+const planFile=round3?'round3-plan.json':round2?'round2-plan.json':'mvp-plan.json';
 const plan=JSON.parse(fs.readFileSync(path.join(docs,planFile),'utf8').replace(/^\uFEFF/,''));
 const labels={todo:'待开始',doing:'进行中',review:'待验收',blocked:'受阻',deferred:'已暂缓',done:'已完成'};
 const tasks=plan.phases.flatMap(p=>p.tasks);
@@ -56,18 +57,19 @@ for(const phase of plan.phases){
 const checked=ids=>ids.every(id=>byId.get(id)?.status==='done')?'x':' ';
 md+=`\n## 发布门槛\n\n- [${done===tasks.length?'x':' '}] 所有必交付任务附证据完成，无未解决的阻断问题。\n- [${checked(['M1-05','M5-03','M5-04','M6-01','M6-02'])}] 干净 Windows 安装、真实数据旅程、恢复及升级通过。\n- [${checked(['M6-04'])}] 数据权限、模型配置、已知限制及发布说明已交付。\n\n发布门槛由对应任务的完成证据驱动，不因规划文档完成而勾选。\n`;
 if(round2){md=md.slice(0,md.indexOf('\n## 发布门槛')).replaceAll('Stock MVP','Stock Round 2').replaceAll('mvp-plan.json','round2-plan.json').replaceAll('mvp-development.md','round2-development.md');md+='\n\n## 验收边界\n\n第一轮已获用户阶段验收，技术遗留项保留；异机安装测试暂缓。Round 2 以开发文档中的完整使用场景及真实证据验收，不将规划完成计入实现进度。\n'}
-const template=fs.readFileSync(path.join(docs,'progress',round2?'round2-template.html':'template.html'),'utf8');
+if(round3){md=md.slice(0,md.indexOf('\n## 发布门槛')).replaceAll('Stock MVP','Stock Loom Round 3').replaceAll('mvp-plan.json','round3-plan.json').replaceAll('mvp-development.md','round3-development.md');md=md.replace('开发完成：**'+done+'/'+tasks.filter(t=>t.status!=='deferred').length+'**','开发完成：**'+done+'/'+tasks.length+'**');md+='\n\n## Beta 发布门槛\n\n- ['+(tasks.every(t=>t.status==='done')?'x':' ')+'] 全部任务验收通过，包括暂缓的异机安装；无阻断缺陷。\n- ['+checked(['A2-08','B-03'])+'] 真实升级、数据保留和恢复证据齐备。\n- ['+checked(['B-01','B-05','B-06'])+'] 分发、使用验收和发布资源通过。\n\n暂缓项不从完整 Beta 门槛中豁免；当前只规划，不执行异机测试。\n'}
+const template=fs.readFileSync(path.join(docs,'progress',round3?'round3-template.html':round2?'round2-template.html':'template.html'),'utf8');
 assert(template.includes('__PLAN_JSON__'),'缺少数据插槽');
 const html=template.replace('__PLAN_JSON__',JSON.stringify(plan).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029'));
 for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)){
   if(match[0].includes('type="application/json"'))continue;
   new vm.Script(match[1]);
 }
-const outputs=[[path.join(docs,round2?'round2-checklist.md':'mvp-checklist.md'),md],[path.join(docs,'progress','dist',round2?'index.html':'round1.html'),html]];
+const outputs=[[path.join(docs,round3?'round3-checklist.md':round2?'round2-checklist.md':'mvp-checklist.md'),md],[path.join(docs,'progress','dist',round3?'index.html':round2?'round2.html':'round1.html'),html]];
 for(const [,href] of html.matchAll(/href="([^"]+)"/g)){
   if(href.startsWith('#')||href.startsWith('data:'))continue;
   assert(!/^https?:/.test(href),'离线看板不应依赖远程资源');
-  assert(fs.existsSync(path.resolve(docs,'progress','dist',href)),`本地链接不存在: ${href}`);
+  assert(outputs.some(([file])=>file===path.resolve(docs,'progress','dist',href))||fs.existsSync(path.resolve(docs,'progress','dist',href)),`本地链接不存在: ${href}`);
 }
 if(process.argv.includes('--check')){
   for(const [file,content] of outputs)assert(fs.existsSync(file)&&fs.readFileSync(file,'utf8')===content,`生成文件已过期：${file}`);

@@ -34,8 +34,8 @@ app.on('browser-window-created',(_event,win)=>{if(started)return;started=true;
       throw Error('Transport did not start');
     }
     const before=JSON.parse(fs.readFileSync(path.join(directory,'ready.json')));
-    const jobs=await js('window.stock.jobs()');assert.equal(jobs.length,1);assert.equal(jobs[0].id,before.jobId);assert.equal(jobs[0].state,'interrupted');assert.equal(jobs[0].result,null);
-    record.job=jobs[0];record.onlyOriginalInterruptedJob=true;finish();
+    const allJobs=await js('window.stock.jobs()');const jobs=allJobs.filter(job=>job.kind==='catalog.sync');assert.equal(jobs.length,1);assert.equal(jobs[0].id,before.jobId);assert.equal(jobs[0].state,'interrupted');assert.equal(jobs[0].result,null);
+    record.job=jobs[0];record.onlyOriginalCatalogJob=true;record.otherJobKinds=allJobs.filter(job=>job.kind!=='catalog.sync').map(job=>job.kind);finish();
   })().catch(e=>finish(String(e.stack||e))));
 });
 require(path.resolve('dist/main/main.cjs'));

@@ -1,6 +1,6 @@
 {
   "name": "stock-workshop",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-beta.1",
   "private": true,
   "description": "Stock Loom · 观市 — local-first A-share workspace with Codex Copilot",
   "author": "CrxzyChen",

@@ -6,7 +6,9 @@ import ssl
 import urllib.error
 import urllib.request
 
-ENDPOINTS = ('stock_basic', 'trade_cal', 'daily', 'adj_factor', 'daily_basic', 'income', 'balancesheet', 'cashflow', 'index_daily', 'daily_info', 'sz_daily_info', 'anns_d', 'stk_limit', 'index_classify', 'index_member_all', 'sw_daily')
+from reference_data import SPECS
+
+ENDPOINTS = ('stock_basic', 'trade_cal', 'daily', 'adj_factor', 'daily_basic', 'income', 'balancesheet', 'cashflow', 'index_daily', 'daily_info', 'sz_daily_info', 'anns_d', 'stk_limit', 'index_classify', 'index_member_all', 'sw_daily') + tuple(SPECS)
 MAX_RESPONSE = 8 * 1024 * 1024
 
 
@@ -107,6 +109,12 @@ def diagnose(token, api, send=transport):
         params, fields = {'l1_code': '801780.SI', 'is_new': 'Y', 'limit': 10}, 'l1_code,ts_code,name'
     elif api == 'sw_daily':
         params, fields = {'ts_code': '801780.SI', 'start_date': start, 'end_date': end}, 'ts_code,trade_date,close'
+    if api in SPECS:
+        from reference_data import request
+        sample={'endpoint':api,'instrumentId':'000001.SZ','start':start,'end':end}
+        if api=='bse_mapping':sample['instrumentId']='920163.BJ'
+        if api=='stk_rewards':sample['end']=str(now.year-1)+'1231';sample['start']=str(now.year-1)+'0101'
+        _,params,fields=request(sample)
     result = {'endpoint': api, 'checkedAt': now.isoformat(), 'rows': 0}
     try:
         rows = query(token, api, params, fields, send)

@@ -1,8 +1,18 @@
 {
   "scope": "Python Store.dispatch RPC only; does not include Electron IPC or Agent tools",
-  "methods": 92,
-  "bothMapped": 92,
+  "methods": 99,
+  "bothMapped": 99,
   "rows": [
+    {
+      "method": "announcements.read",
+      "request": "AnnouncementReadRequest",
+      "response": "AnnouncementPage"
+    },
+    {
+      "method": "announcements.sync",
+      "request": "AnnouncementSyncRequest",
+      "response": "AnnouncementSyncResult"
+    },
     {
       "method": "autosync.configure",
       "request": "EnabledPolicy",
@@ -179,6 +189,16 @@
       "response": "Job"
     },
     {
+      "method": "ledger.read",
+      "request": "LedgerReadRequest",
+      "response": "LedgerReadResult"
+    },
+    {
+      "method": "ledger.write",
+      "request": "LedgerWriteRequest",
+      "response": "LedgerWriteResult"
+    },
+    {
       "method": "market.read",
       "request": "MarketReadRequest",
       "response": "OptionalMarketSnapshot"
@@ -277,6 +297,21 @@
       "method": "recap.policy",
       "request": "NoParams",
       "response": "EnabledPolicy"
+    },
+    {
+      "method": "reference.catalog",
+      "request": "NoParams",
+      "response": "ReferenceCatalog"
+    },
+    {
+      "method": "reference.read",
+      "request": "ReferenceReadRequest",
+      "response": "ReferencePage"
+    },
+    {
+      "method": "reference.sync",
+      "request": "ReferenceSyncRequest",
+      "response": "ReferenceSyncResult"
     },
     {
       "method": "research.chart",

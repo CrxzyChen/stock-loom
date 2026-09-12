@@ -1,11 +1,14 @@
 <script setup lang="ts">
+import {PROVIDER_ENDPOINTS} from '../../../../packages/contracts/generated';
+import TabContextMenu from './TabContextMenu.vue';
+import {closeTabs} from './tab-actions.mjs';
 import CloseWindowDialog from './CloseWindowDialog.vue';
 import SchedulerPanel from './SchedulerPanel.vue';
 import UiButton from './UiButton.vue';
 import SettingsLayout from './SettingsLayout.vue';
 import SettingsMore from './SettingsMore.vue';
 import {buttonIcons} from './button-icons';
-import {computed,onBeforeUnmount,onMounted,ref,watch} from 'vue';
+import {computed,nextTick,onBeforeUnmount,onMounted,ref,watch} from 'vue';
 import {readWorkspace,writeWorkspace} from './workspace-state.mjs';
 import {readLayout,writeLayout,inspectorWidth,minInspectorWidth,maxInspectorWidth,contextWidth,minContextWidth,maxContextWidth} from './layout-state.mjs';
 import WatchlistPanel from './WatchlistPanel.vue';
@@ -31,10 +34,15 @@ import NativeConfigSettings from './NativeConfigSettings.vue';
 import NativeMcpSettings from './NativeMcpSettings.vue';
 import CodexSandboxSettings from './CodexSandboxSettings.vue';
 import UpdatePanel from './UpdatePanel.vue';
-import type {Diagnostic,Overview,ServiceStatus,Settings,Watchlist} from '../../../../packages/contracts/desktop';
+import type {UpdateStatus,Diagnostic,Overview,ServiceStatus,Settings,Watchlist} from '../../../../packages/contracts/desktop';
 type Page=`sector:${string}`|`index:${string}`|`compare:${string}`|`stock:${string}`|`file:${string}`|'holdings'|'market'|'watchlists'|'research'|'jobs'|'settings';
 const fileGuards=ref<Record<string,boolean>>({});
 function updateGuard(id:string,blocked:boolean){fileGuards.value[id]=blocked;const guarded=Object.values(fileGuards.value).some(Boolean);void window.stock?.windowDraftGuard(guarded).catch(()=>{error.value='无法更新窗口保护，请先保存草稿。'});if(!guarded&&['此文件的草稿无法自动保存，请先保存文件。','有未保存的草稿，请先保存或重试草稿存储。'].includes(error.value))error.value=''}
+const updateNotice=ref<UpdateStatus|null>(null),revealUpdateSettings=ref(0);
+let updatePoll:ReturnType<typeof setTimeout>|undefined,updatePollingStopped=false;
+async function pollUpdateNotice(){if(!window.stock||updatePollingStopped)return;try{updateNotice.value=await window.stock.updateStatus()}catch{}finally{if(!updatePollingStopped)updatePoll=setTimeout(pollUpdateNotice,5000)}}
+function openUpdateSettings(){revealUpdateSettings.value++;openTab('settings')}
+onMounted(()=>void pollUpdateNotice());onBeforeUnmount(()=>{updatePollingStopped=true;clearTimeout(updatePoll)});
 const tabsVisible=ref(true);
 try{tabsVisible.value=localStorage.getItem('stock.tabs-visible')!=='false'}catch{}
 watch(tabsVisible,value=>{try{localStorage.setItem('stock.tabs-visible',String(value))}catch{}});
@@ -44,7 +52,17 @@ const selectedTab=ref<Page|null>('market');
 function openTab(id:Page){tabsVisible.value=true;if(!tabs.value.includes(id))tabs.value.push(id);selectedTab.value=id}
 const page=computed({get:()=>selectedTab.value,set:(id:Page|null)=>{if(id)openTab(id)}});
 function openComparison(ids:string[]){const sorted=[...new Set(ids)].sort();if(sorted.length>=2&&sorted.length<=4&&sorted.every(id=>/^\d{6}\.(SH|SZ|BJ)$/.test(id)))openTab(`compare:${sorted.join(',')}`)}
-function closeTab(id:Page){if(fileGuards.value[id]){error.value='此文件的草稿无法自动保存，请先保存文件。';return}const index=tabs.value.indexOf(id);tabs.value=tabs.value.filter(t=>t!==id);if(selectedTab.value===id)selectedTab.value=tabs.value[Math.min(index,tabs.value.length-1)]??null}
+const tabMenu=ref<{target:Page,x:number,y:number}|null>(null);
+let tabMenuTrigger:HTMLElement|null=null;
+function showTabMenu(event:MouseEvent|KeyboardEvent,id:Page){
+ event.preventDefault();const element=event.currentTarget as HTMLElement;tabMenuTrigger=element.querySelector<HTMLElement>('[role="tab"]')??element;
+ const rect=element.getBoundingClientRect();tabMenu.value={target:id,x:event instanceof MouseEvent?event.clientX:rect.left,y:event instanceof MouseEvent?event.clientY:rect.bottom};
+}
+function tabMenuKey(event:KeyboardEvent,id:Page){if(event.key==='ContextMenu'||(event.shiftKey&&event.key==='F10'))showTabMenu(event,id)}
+async function dismissTabMenu(){tabMenu.value=null;await nextTick();if(tabMenuTrigger?.isConnected)tabMenuTrigger.focus();else (document.querySelector<HTMLElement>('.work-tabs [aria-selected="true"]')??document.querySelector<HTMLElement>('.activity button'))?.focus()}
+function closeTabSet(ids:string[]){const result=closeTabs(tabs.value,selectedTab.value,ids,fileGuards.value);tabs.value=result.tabs as Page[];selectedTab.value=result.active as Page|null;if(result.blocked.length)error.value='此文件的草稿无法自动保存，请先保存文件。';void dismissTabMenu()}
+function closeTab(id:Page){closeTabSet([id])}
+
 function moveTab(id:Page,direction:number){const from=tabs.value.indexOf(id),to=from+direction;if(to<0||to>=tabs.value.length)return;const next=[...tabs.value];[next[from],next[to]]=[next[to],next[from]];tabs.value=next}
 const panel=ref('market');
 const panels=[{id:'market',name:'市场',icon:'chart'},{id:'stocks',name:'我的股票',icon:'star'},{id:'project',name:'项目',icon:'folder'},{id:'scheduler',name:'Scheduler',icon:'clock'}];
@@ -139,7 +157,7 @@ async function syncBasics(){
     }finally{syncing.value='';await refresh()}
   });
 }
-const diagnosticEndpoints=['stock_basic','trade_cal','daily','adj_factor','daily_basic','income','balancesheet','cashflow','index_daily','daily_info','sz_daily_info','anns_d'];
+const diagnosticEndpoints=PROVIDER_ENDPOINTS;
 const diagnostics=ref<Record<string,Diagnostic>>({}),checking=ref('');
 async function diagnose(){
   if(!window.stock||checking.value)return;
@@ -151,7 +169,7 @@ let dispose=()=>{};
 let refreshGeneration=0;
 async function refresh(){if(!window.stock||status.value.maintenance)return;const generation=++refreshGeneration,project=projectPath.value;try{const [data,groups,c]=await Promise.all([window.stock.overview(),window.stock.watchlists(),window.stock.credentialStatus()]);if(generation!==refreshGeneration||project!==projectPath.value)return;overview.value=data;lists.value=groups;credentials.value=c;preferences.value={...data.settings};refreshError.value=''}catch(e){refreshError.value=String(e instanceof Error?e.message:e)}}
 async function execute(fn:()=>Promise<void>){if(busy.value)return;busy.value=true;error.value='';notice.value='';try{await fn()}catch(e){error.value=(e instanceof Error?e.message:String(e)).replace(/^Error invoking remote method 'stock:[a-z:]+': Error: /,'')}finally{busy.value=false}}
-async function saveToken(){await execute(async()=>{if(!window.stock)throw Error('请在桌面应用中配置凭证。');const submitted=token.value.trim();token.value='';credentials.value=await window.stock.saveTushareToken(submitted);diagnostics.value={};tokenEditing.value=false;notice.value=credentials.value.encrypted?'已保存。':'凭证仅保留于本次会话。'})}
+async function saveToken(){await execute(async()=>{if(!window.stock)throw Error('请在桌面应用中配置凭证。');const submitted=token.value.trim();credentials.value=await window.stock.saveTushareToken(submitted);token.value='';diagnostics.value={};tokenEditing.value=false;notice.value=credentials.value.encrypted?'已保存。':'凭证仅保留于本次会话。'})}
 async function savePreferences(){await execute(async()=>{if(!window.stock)throw Error('请在桌面应用中保存设置。');try{preferences.value=await window.stock.saveSettings({...preferences.value});if(overview.value)overview.value.settings={...preferences.value};preferenceNotice.value='已保存。'}catch(e){if(overview.value)preferences.value={...overview.value.settings};throw e}})}
 async function createList(){await execute(async()=>{if(!window.stock)throw Error('请在桌面应用中创建分组。');const created=await window.stock.createWatchlist(listName.value);activeGroup.value=created.id;page.value='watchlists';listName.value='';await refresh();dialog.value?.close();notice.value='自选分组已创建。'})}
 async function retry(){await execute(async()=>{if(!window.stock)return;status.value=await window.stock.retryService();await refresh()})}
@@ -177,7 +195,8 @@ async function backup(restore=false){await execute(async()=>{
   }finally{clearInterval(backupTimer);backupOperation.value=''} 
 })}
 onMounted(async()=>{if(!window.stock)return;projectPath.value=(await window.stock.copilotProject()).path;restoreWorkspace();dispose=window.stock.onServiceStatus(s=>{status.value=s;if(s.state==='ready'&&!s.maintenance)void refresh()});status.value=await window.stock.serviceStatus();if(status.value.state==='ready')await refresh()});
-onBeforeUnmount(()=>{dispose();clearInterval(backupTimer);token.value=''});
+const unsubscribeData=window.stock?.onDataChanged(domain=>{if(domain==='watchlists')void refresh()});
+onBeforeUnmount(()=>{unsubscribeData?.();dispose();clearInterval(backupTimer);token.value=''});
 </script>
 
 <template>
@@ -191,12 +210,12 @@ onBeforeUnmount(()=>{dispose();clearInterval(backupTimer);token.value=''});
       <SchedulerPanel v-if="panel==='scheduler'" :key="projectPath" @open="inspectorOpen=true"/>
     </aside>
     <div ref="central" class="central-workspace" :class="{'conversation-hidden':!inspectorOpen,'tabs-hidden':!tabsVisible}" :style="{'--conversation-column':conversationWidth+historyWidth+'px'}">
-    <main v-show="tabsVisible" id="tabs-workarea" class="workarea"><div class="tabs-header"><div class="work-tabs" role="tablist" aria-label="已打开的信息页面"><div v-for="id in tabs" :key="id" :class="['work-tab',{selected:page===id}]"><button role="tab" :aria-selected="page===id" :aria-controls="'tab-'+id" @click="selectedTab=id" @keydown.alt.left.prevent="moveTab(id,-1)" @keydown.alt.right.prevent="moveTab(id,1)">{{tabTitle(id)}}</button><UiButton icon="close" icon-only :aria-label="'关闭 '+tabTitle(id)" @click="closeTab(id)">×</UiButton></div></div><UiButton ref="inspectorToggle" class="tabs-conversation-toggle" icon="panel" icon-only :aria-label="inspectorOpen?'关闭会话区':'打开会话区'" :aria-expanded="inspectorOpen" aria-controls="research-inspector" @click="inspectorOpen=!inspectorOpen">{{inspectorOpen?'关闭会话区':'打开会话区'}}</UiButton></div><div v-if="page!=='settings'&&page!=='market'&&!page?.startsWith('index:')&&!page?.startsWith('sector:')&&!page?.startsWith('file:')&&!page?.startsWith('stock:')" class="page-heading"><div><p class="eyebrow">A 股研究工作台</p><h1>{{title}}</h1></div><div class="page-tools"><span class="quiet-label">本地存储</span></div></div>
+    <TabContextMenu v-if="tabMenu" :tabs="tabs" :target="tabMenu.target" :x="tabMenu.x" :y="tabMenu.y" @close="closeTabSet" @dismiss="dismissTabMenu"/><main v-show="tabsVisible" id="tabs-workarea" class="workarea"><div class="tabs-header"><div class="work-tabs" role="tablist" aria-label="已打开的信息页面"><div v-for="id in tabs" :key="id" :class="['work-tab',{selected:page===id}]" @contextmenu="showTabMenu($event,id)" @keydown="tabMenuKey($event,id)"><button role="tab" :aria-selected="page===id" :aria-controls="'tab-'+id" @click="selectedTab=id" @keydown.alt.left.prevent="moveTab(id,-1)" @keydown.alt.right.prevent="moveTab(id,1)">{{tabTitle(id)}}</button><UiButton icon="close" icon-only :aria-label="'关闭 '+tabTitle(id)" @click="closeTab(id)">×</UiButton></div></div><UiButton ref="inspectorToggle" class="tabs-conversation-toggle" icon="panel" icon-only :aria-label="inspectorOpen?'关闭会话区':'打开会话区'" :aria-expanded="inspectorOpen" aria-controls="research-inspector" @click="inspectorOpen=!inspectorOpen">{{inspectorOpen?'关闭会话区':'打开会话区'}}</UiButton></div><div v-if="page!=='settings'&&page!=='market'&&!page?.startsWith('index:')&&!page?.startsWith('sector:')&&!page?.startsWith('file:')&&!page?.startsWith('stock:')" class="page-heading"><div><p class="eyebrow">A 股研究工作台</p><h1>{{title}}</h1></div><div class="page-tools"><span class="quiet-label">本地存储</span></div></div>
       <div v-if="!desktop" class="banner preview" role="status">浏览器界面预览。数据、分组和凭证写入需要在 Electron 桌面应用中操作。</div>
       <div v-if="status.state==='failed'" class="banner error" role="alert"><span>{{status.message}}</span><UiButton icon="refresh" :disabled="busy" @click="retry">重新连接</UiButton></div>
       <div v-if="error||refreshError" class="banner error" role="alert">{{error||refreshError}}</div><div v-if="notice" class="banner success" role="status">{{notice}}</div>
       <div v-if="maintenanceActive" class="banner" role="status">{{backupOperation||'正在维护本地资料'}}。操作完成前暂时停用页面操作，请保持应用打开。<span v-if="backupOperation">已等待 {{backupElapsed}} 秒</span></div><div v-for="tab in tabs" v-show="page===tab" :id="'tab-'+tab" :key="projectPath+':'+tab" class="tab-content" role="tabpanel" :inert="maintenanceActive"><template v-if="tab==='settings'">
-        <SettingsLayout>
+        <SettingsLayout :reveal-system="revealUpdateSettings">
           <template #connection><ResearchAccount :running="maintenanceActive"/><NativeConfigSettings/></template>
           <template #tools><StockToolsSettings/><NativeMcpSettings/></template>
           <template #security><CodexSandboxSettings/></template>
@@ -209,7 +228,7 @@ onBeforeUnmount(()=>{dispose();clearInterval(backupTimer);token.value=''});
       <HoldingsPanel v-else-if="tab==='holdings'" @open="openTab(`stock:${$event}`)"/>
       <ProjectFileTab v-else-if="tab.startsWith('file:')" :path="tab.slice(5)" :project="projectPath" @open="openTab(`file:${$event}`)" @guard="updateGuard(tab,$event)"/>
       <StockComparison v-else-if="tab.startsWith('compare:')" :ids="tab.slice(8).split(',')" @open="openTab(`stock:${$event}`)"/><StockDetail v-else-if="tab.startsWith('stock:')" :id="tab.slice(6)" :color-mode="preferences.colorMode" @loaded="stockNames[$event.id]=$event.name" @changed="refresh" @settings="page='settings'"/>
-      <SectorDetail v-else-if="tab.startsWith('sector:')" :id="tab.slice(7)" :color-mode="preferences.colorMode" @open="openTab(`stock:${$event}`)" @changed="refresh"/>
+      <SectorDetail @compare="openComparison" v-else-if="tab.startsWith('sector:')" :id="tab.slice(7)" :color-mode="preferences.colorMode" @open="openTab(`stock:${$event}`)" @changed="refresh"/>
       <MarketOverview @sector="openSector" v-else-if="tab==='market'||tab.startsWith('index:')" :index-id="tab.startsWith('index:')?tab.slice(6):undefined" :color-mode="preferences.colorMode" @open="openTab(`stock:${$event}`)" @index="openTab(`index:${$event}`)" @changed="refresh"/>
       <JobsPanel v-else-if="tab==='jobs'"/>
       <ResearchPanel v-else-if="tab==='research'"/>
@@ -217,7 +236,7 @@ onBeforeUnmount(()=>{dispose();clearInterval(backupTimer);token.value=''});
     </div><div v-if="!tabs.length" class="empty-work"><h2>打开你想看的信息</h2><p>从左侧选择行情、自选或项目内容。</p><UiButton icon="chart" @click="openTab('market')">打开行情</UiButton></div></main>
     <aside v-show="inspectorOpen" id="research-inspector" class="inspector" aria-label="研究助手" @keydown.esc.stop="closeInspector"><div v-show="tabsVisible" class="inspector-resize" role="separator" tabindex="0" aria-label="调整 Tab 与对话宽度，左右方向键调整" aria-orientation="vertical" :aria-valuemin="Math.round(splitMinimum)" :aria-valuemax="Math.round(splitSpace-splitMinimum)" :aria-valuenow="Math.round(conversationWidth)" aria-controls="research-inspector" @pointerdown="beginResize" @pointermove="resize" @pointerup="finishResize" @pointercancel="finishResize" @lostpointercapture="finishResize" @keydown="resizeKey"/><CopilotPanel :tabs-visible="tabsVisible" @toggle-tabs="tabsVisible=!tabsVisible" @history-layout="historyExtra=$event" @guard="updateGuard('copilot',$event)" @open="openTab(`file:${$event}`)"/></aside>
     </div>
-    <footer class="statusbar"><span class="footer-status"><span class="connection" :class="status.state" role="status"><i/>{{status.message}}</span><span>{{overview?.dataAsOf?'数据截至 '+overview.dataAsOf:'尚未同步行情'}}</span></span><span>Midnight Workshop · A 股</span></footer>
+    <footer class="statusbar"><span class="footer-status"><span class="connection" :class="status.state" role="status"><i/>{{status.message}}</span><span>{{overview?.dataAsOf?'数据截至 '+overview.dataAsOf:'尚未同步行情'}}</span></span><button v-if="updateNotice&&['available','downloading','verifying','verified'].includes(updateNotice.state)" class="update-notice" @click="openUpdateSettings">{{updateNotice.state==='verified'?'重启更新':updateNotice.state==='available'?'发现新版本 '+updateNotice.version:updateNotice.state==='downloading'?'正在下载更新':'正在校验更新'}}</button><span v-else>Midnight Workshop · A 股</span></footer>
     <CloseWindowDialog/>
     <dialog ref="dialog" aria-labelledby="new-list-title"><form @submit.prevent="createList"><div class="dialog-title"><h2 id="new-list-title">新建自选分组</h2><UiButton icon="close" icon-only type="button" @click="dialog?.close()">关闭</UiButton></div><label for="list-name">分组名称</label><input id="list-name" v-model="listName" maxlength="40" placeholder="例如：长期关注" autofocus required><p v-if="error" class="field-error" role="alert">{{error}}</p><div class="dialog-actions"><UiButton icon="close" icon-only type="button" @click="dialog?.close()">取消</UiButton><UiButton icon="plus" class="primary" :disabled="busy||!listName.trim()">创建分组</UiButton></div></form></dialog>
   </div>

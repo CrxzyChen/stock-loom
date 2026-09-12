@@ -23,15 +23,16 @@ async function rename(){
   try{await window.stock.renameWatchlist(selected.value,newName.value);renaming.value=false;notice.value='分组名称已更新。';emit('changed')}
   catch(e){error.value=e instanceof Error?e.message:String(e)}finally{busy.value=false;await nextTick();if(renaming.value)renameInput.value?.focus();else renameButton.value?.focus()}
 }
+watch(selected,()=>{renaming.value=false;notice.value=''});
 let memberVersion=0,searchVersion=0;
 const memberGroups=new Map<string,string[]>();
 watch(()=>[props.groups,props.selectedId] as const,([groups,id])=>{selected.value=id&&groups.some(g=>g.id===id)?id:''},{immediate:true});
 async function loadMembers(){const id=selected.value;
   emit('selected',id);
   renaming.value=false;notice.value='';
-  const version=++memberVersion;members.value=[];quotes.value={};quoteLoading.value=true;error.value='';
+  const version=++memberVersion;quoteLoading.value=true;error.value='';
   if(!window.stock)return;
-  try{const groups=id?props.groups.filter(g=>g.id===id):await window.stock.watchlists();const pages=await Promise.all(groups.map(async g=>({id:g.id,rows:await window.stock!.watchlistMembers(g.id)})));if(version===memberVersion){memberGroups.clear();const all=new Map<string,Instrument>();for(const page of pages)for(const item of page.rows){all.set(item.id,item);memberGroups.set(item.id,[...(memberGroups.get(item.id)??[]),page.id])}members.value=[...all.values()]}}
+  try{const groups=id?props.groups.filter(g=>g.id===id):await window.stock.watchlists();const pages=await Promise.all(groups.map(async g=>({id:g.id,rows:await window.stock!.watchlistMembers(g.id)})));if(version===memberVersion){quotes.value={};memberGroups.clear();const all=new Map<string,Instrument>();for(const page of pages)for(const item of page.rows){all.set(item.id,item);memberGroups.set(item.id,[...(memberGroups.get(item.id)??[]),page.id])}members.value=[...all.values()]}}
   catch(e){if(version===memberVersion)error.value=String(e instanceof Error?e.message:e)}
   try{for(let offset=0;offset<members.value.length;offset+=50){if(version!==memberVersion)return;const rows=await window.stock.latestQuotes(members.value.slice(offset,offset+50).map(i=>i.id));if(version!==memberVersion)return;for(const quote of rows)quotes.value[quote.instrumentId]=quote}}
   catch(e){if(version===memberVersion)error.value=e instanceof Error?e.message:String(e)}finally{if(version===memberVersion)quoteLoading.value=false}

@@ -11,7 +11,7 @@ const availableModels=ref<any[]>([]),modelWarning=ref('');
 async function loadModels(){const address=baseUrl.value;const result=await window.stock!.providerModels();if(address!==baseUrl.value)return;availableModels.value=result.data;modelWarning.value=result.warning??''}
 const stored=ref('');const signature=()=>JSON.stringify([name.value,baseUrl.value,model.value,authenticated.value]);const dirty=computed(()=>signature()!==stored.value||!!apiKey.value);
 function deepseek(){name.value='DeepSeek';baseUrl.value='https://api.deepseek.com';model.value='deepseek-flash';authenticated.value=true;apiKey.value='';error.value='';notice.value='已填入 DeepSeek 官方配置。请填写 DeepSeek API Key，然后点击连接。'}
-async function action(fn:()=>Promise<void>){if(!window.stock||busy.value||props.running)return;busy.value=true;error.value='';notice.value='';try{await fn()}catch(e){error.value=e instanceof Error?e.message:String(e)}finally{busy.value=false}}
+async function action(fn:()=>Promise<void>){if(!window.stock||busy.value||props.running)return;busy.value=true;error.value='';notice.value='';try{await fn()}catch(e){error.value=e instanceof Error?e.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/,''):'连接操作失败，请重试。'}finally{busy.value=false}}
 async function connect(){await action(async()=>{
   connected.value=false;
   if(!configured.value||dirty.value){

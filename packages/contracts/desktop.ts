@@ -3,11 +3,14 @@ import type {ServiceState,ServiceStatus,Settings,Overview,Watchlist,JobEvent,Job
 export type {ServiceState,ServiceStatus,Settings,Overview,Watchlist,JobEvent,JobEventPage,Instrument,Adjustment,Bar,BarPage,BarVersion,FinancialData,FinancialVersion,ScreenCondition,ScreenPage,InstrumentPage,Diagnostic,Job,ScreenPoolPlan,ScreenBatch,RecapReport,RecapResult,ModelRecapPolicy,ModelRecapUsage,ModelRecapAttempt,ModelRecapContent,ResearchContext,ResearchEntry,ResearchReport,RpcMetadata} from './generated';
 export interface ModelRecapInfo {policy:ModelRecapPolicy;usage:ModelRecapUsage;attempt:ModelRecapAttempt;status:{state:string;message:string};quote:{reservedMicroUsd:number;maxOutputTokens:number;priceCheckedAt:string}|null;priceError:string;model:string}
 export interface ModelRecapReport {date:string;model:string;estimatedMicroUsd:number|null;reservedMicroUsd:number;report:ModelRecapContent;facts:{id:string;value:number;unit:string;date:string}[]}
-export interface UpdateStatus {repo:string;current:string;state:string;version:string|null;notes:string;received:number;total:number;message:string}
+export interface UpdateStatus {repo:string;channel:'stable'|'preview';current:string;state:string;version:string|null;notes:string;received:number;total:number;message:string}
 export type DesktopResearchReport = ResearchReport & {provenance:RpcMetadata & {requestId:string}};
 export interface ProviderSettings {name:string;baseUrl:string;model:string;apiKey:string}
 export interface ProviderStatus {name:string;baseUrl:string;model:string;configured:boolean;hasKey:boolean;encrypted:boolean}
 export interface DesktopBridge {
+  referenceCatalog():Promise<import('./generated').ReferenceCatalog>;
+  readReference(p:import('./generated').ReferenceReadRequest):Promise<import('./generated').ReferencePage>;
+  syncReference(p:import('./generated').ReferenceParams):Promise<import('./generated').ReferenceSyncResult>;
   copilotTools(threadId:string,cursor?:string|null):Promise<{data:{name:string;runtimeStatus:string|null;authStatus:string;toolCount:number;discoveryFailed:boolean}[];nextCursor:string|null}>;
   nativeMcpRead():Promise<{project:string;file:string|null;version:string|null;servers:{name:string;enabled:boolean;effectiveEnabled:boolean|null;type:string}[]}>;
   nativeMcpWrite(value:Record<string,unknown>):Promise<Awaited<ReturnType<DesktopBridge['nativeMcpRead']>>&{status:string}>;
@@ -25,6 +28,8 @@ export interface DesktopBridge {
   saveCopilotPolicy(value:{networkAccess:boolean;mode:'ask'|'auto-review'|'full-access'}):Promise<{networkAccess:boolean;mode:'ask'|'auto-review'|'full-access'}>;
   codexSandboxStatus():Promise<{readiness:string;mode:string|null}>;
   codexSandboxSetup(mode:'elevated'|'unelevated'):Promise<{readiness:string;mode:string|null}>;
+  readLedger(params:import('./generated').LedgerReadRequest):Promise<import('./generated').LedgerReadResult>;
+  writeLedger(params:import('./generated').LedgerWriteRequest):Promise<import('./generated').LedgerWriteResult>;
   holdings():Promise<import('./generated').Holding[]>;
   latestQuotes(instrumentIds:string[]):Promise<import('./generated').LatestQuote[]>;
   holdingsSummary():Promise<import('./generated').HoldingsSummary>;
@@ -52,7 +57,7 @@ export interface DesktopBridge {
   schedulerSave(task:any):Promise<any>;
   schedulerRemove(id:string):Promise<void>;
   schedulerRun(id:string):Promise<any>;
-  schedulerOpen(threadId:string):Promise<void>;
+  schedulerOpen(threadId:string,turnId?:string):Promise<void>;
   onSchedulerChanged(listener:()=>void):()=>void;
   copilotGoal(threadId:string,change?:{clear?:true;objective?:string;status?:'active'|'paused';tokenBudget?:number|null}):Promise<any>;
   copilotInterrupt(threadId:string):Promise<{interrupted:boolean}>;
@@ -77,7 +82,7 @@ export interface DesktopBridge {
   windowMaximized():Promise<boolean>;
   onWindowMaximized(listener:(maximized:boolean)=>void):()=>void;
   updateStatus():Promise<UpdateStatus>;
-  configureUpdates(repo:string):Promise<UpdateStatus>;
+  configureUpdates(repo:string,channel?:'stable'|'preview'):Promise<UpdateStatus>;
   checkUpdates():Promise<UpdateStatus>;
   downloadUpdate():Promise<UpdateStatus>;
   cancelUpdate():Promise<UpdateStatus>;
@@ -136,6 +141,9 @@ export interface DesktopBridge {
   barVersions(instrumentId:string):Promise<BarVersion[]>;
   readBars(snapshotId:string,adjustment:Adjustment,offset:number):Promise<BarPage>;
   syncFinancials(instrumentId:string,endpoint:string,start:string,end:string):Promise<{snapshotId:string;rows:number;asOf:string}>;
+  openAnnouncement(instrumentId:string,offset:number,id:string):Promise<void>;
+  readAnnouncements(instrumentId:string,offset:number):Promise<import('./generated').AnnouncementPage>;
+  syncAnnouncements(instrumentId:string,start:string,end:string):Promise<import('./generated').AnnouncementSyncResult>;
   readFinancials(instrumentId:string,endpoint:string,snapshotId?:string):Promise<FinancialData>;
   financialSnapshots(instrumentId:string,endpoint:string):Promise<FinancialVersion[]>;
   jobs():Promise<Job[]>;
@@ -157,6 +165,7 @@ export interface DesktopBridge {
   serviceStatus(): Promise<ServiceStatus>;
   retryService(): Promise<ServiceStatus>;
   onServiceStatus(listener: (status: ServiceStatus) => void): () => void;
+  onDataChanged(listener: (domain: 'holdings'|'watchlists') => void): () => void;
 }
 declare global { interface Window { stock?: DesktopBridge } }
 

@@ -1,3 +1,6 @@
+import {announcementUrl} from './announcement-url.mjs';
+import {shutdownResources} from './shutdown-resources.mjs';
+import {UpdateCheckScheduler} from './update-check-scheduler.mjs';
 import {TaskScheduler} from './task-scheduler.mjs';
 let taskScheduler:TaskScheduler;
 import {readCopilotPolicy,saveCopilotPolicy,policyThreadOptions} from './copilot-policy.mjs';
@@ -36,6 +39,7 @@ import {recapQuote,recapPricing} from '../../../agent-host/recap-runtime.mjs';
 import {AutoSyncScheduler} from './autosync-scheduler.mjs';
 import {UpdateController} from './update-controller.mjs';
 import {verifyInstallerPublisher} from './installer-signature.mjs';
+import {assertUpdateReady} from './update-readiness.mjs';
 import {installUpdate,validateCandidate,launchInstaller} from './install-update.mjs';
 import {saveBackup} from './save-backup.mjs';
 import {migrateProfile} from './profile-migration.mjs';
@@ -83,6 +87,7 @@ let modelRecap:ModelRecapController;
 let modelRecapConfiguring=false;
 let presence:DesktopPresence;
 let updates:UpdateController;
+let updateChecks:UpdateCheckScheduler;
 let quitting=false;
 let diagnosing=false;
 let maintenance=false;
@@ -134,6 +139,14 @@ async function providerCall(method:string,params:Record<string,unknown>){
   }finally{diagnosing=false}
 }
 function registerIPC(){
+  handle('stock:reference:catalog',()=>service.call('reference.catalog',{}));
+  handle('stock:reference:read',p=>{if(!matchesContract('ReferenceReadRequest',p))throw Error('资料参数无效。');return service.call('reference.read',p)});
+  handle('stock:reference:sync',p=>{if(!matchesContract('ReferenceParams',p))throw Error('资料参数无效。');return providerCall('reference.sync',p)});
+
+  handle('stock:announcements:open',async p=>{if(!p||Object.keys(p).sort().join(',')!=='id,instrumentId,offset'||typeof p.id!=='string'||!matchesContract('AnnouncementReadRequest',{instrumentId:p.instrumentId,offset:p.offset}))throw Error('公告参数无效。');const page=await service.call('announcements.read',{instrumentId:p.instrumentId,offset:p.offset});const row=page.items.find((r:any)=>r.id===p.id);if(!row)throw Error('公告列表已变化，请刷新后重试。');await shell.openExternal(announcementUrl(row.url));});
+
+  handle('stock:announcements:read',p=>{if(!matchesContract('AnnouncementReadRequest',p))throw Error('公告参数无效。');return service.call('announcements.read',p)});
+  handle('stock:announcements:sync',p=>{if(!matchesContract('AnnouncementSyncParams',p))throw Error('公告同步参数无效。');return providerCall('announcements.sync',p)});
   handle('stock:sectors:read',p=>{noParams(p);return service.call('sectors.read',{})});
   handle('stock:sector:history',p=>{if(!matchesContract('SectorRequest',p))throw Error('行业参数无效。');return service.call('sector.history',p)});
   handle('stock:sectors:ensure',async p=>{if(typeof p!=='boolean')throw Error('刷新参数无效。');const policy=await service.call('demand.policy',{});if(!p&&!policy.enabled)return {state:'disabled',message:'自动更新已关闭',jobIds:[]};return service.call('sectors.ensure',{force:p,token:await dataToken()})});
@@ -147,6 +160,8 @@ function registerIPC(){
   handle('stock:holdings:list',p=>{noParams(p);return service.call('holdings.list',{})});
   handle('stock:quotes:latest',p=>{if(!matchesContract('LatestQuoteRequest',p))throw Error('股票参数无效。');return service.call('quotes.latest',p,30000)});
   handle('stock:holdings:summary',p=>{noParams(p);return service.call('holdings.summary',{})});
+  handle('stock:ledger:read',p=>{if(!matchesContract('LedgerReadRequest',p))throw Error('账本参数无效。');return service.call('ledger.read',p)});
+  handle('stock:ledger:write',p=>{if(!matchesContract('LedgerWriteRequest',p))throw Error('账本参数无效。');return service.call('ledger.write',p)});
   handle('stock:holdings:save',p=>{if(!matchesContract('HoldingSaveRequest',p))throw Error('持仓参数无效。');return service.call('holdings.save',p)});
   handle('stock:project:search',p=>projectFiles.search(p));
   handle('stock:project:manage',p=>{if(!p||Object.keys(p).sort().join(',')!=='action,name,path')throw Error('文件操作无效。');return projectFiles.manage(p)});
@@ -168,7 +183,7 @@ function registerIPC(){
   handle('stock:scheduler:save',p=>taskScheduler.save(p));
   handle('stock:scheduler:remove',p=>taskScheduler.remove(p));
   handle('stock:scheduler:run',p=>taskScheduler.runNow(p));
-  handle('stock:scheduler:open',async p=>{const state=await taskScheduler.list();if(!state.runs.some((r:any)=>r.threadId===p||r.blockingThreadId===p))throw Error('运行记录不存在。');window?.webContents.send('stock:copilot:event',{kind:'openScheduledThread',threadId:p})});
+  handle('stock:scheduler:open',async p=>{const threadId=typeof p==='string'?p:p?.threadId,turnId=typeof p==='string'?undefined:p?.turnId;const state=await taskScheduler.list();if(typeof threadId!=='string'||(turnId!==undefined&&typeof turnId!=='string')||!state.runs.some((r:any)=>turnId?r.threadId===threadId&&r.turnId===turnId:r.threadId===threadId||r.blockingThreadId===threadId))throw Error('运行记录不存在。');window?.webContents.send('stock:copilot:event',{kind:'openScheduledThread',threadId,turnId})});
   handle('stock:copilot:list',async p=>(await copilot.connect()).list(p??null));
   handle('stock:copilot:tools',async p=>{if(!p||Object.keys(p).sort().join(',')!=='cursor,threadId')throw Error('会话参数无效。');return (await copilot.connect()).tools(p.threadId,p.cursor)});
   handle('stock:copilot:create',async p=>{noParams(p);return (await copilot.connect()).create()});
@@ -217,23 +232,25 @@ function registerIPC(){
   handle('stock:autosync:policy',p=>{noParams(p);return service.call('autosync.policy')});
   handle('stock:autosync:configure',p=>{if(!p||Object.keys(p).join(',')!=='enabled'||typeof p.enabled!=='boolean')throw Error('补同步设置无效。');return service.call('autosync.configure',p)});
   handle('stock:update:status',p=>{noParams(p);return updates.status()});
-  handle('stock:update:configure',p=>{if(typeof p!=='string'||p.length>140)throw Error('发布源无效。');return updates.configure(p)});
+  handle('stock:update:configure',p=>{const input=typeof p==='string'?{repo:p}:p;if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['repo','channel'].includes(k))||typeof input.repo!=='string'||input.repo.length>140||input.channel!==undefined&&!['stable','preview'].includes(input.channel))throw Error('更新配置无效。');return updates.configure(input.repo,input.channel)});
   for(const action of ['check','download'])handle('stock:update:'+action,p=>{noParams(p);return updates.run(action)});
   handle('stock:update:cancel',p=>{noParams(p);updates.cancel();return updates.status()});
   handle('stock:update:install',async p=>{
     noParams(p);
-    if(quitting||diagnosing)throw Error('请等待当前操作结束后安装。');
+    const ready=()=>assertUpdateReady({draftBlocked:windowDraftBlocked,agentBusy:copilot.busy(),accountBusy:accountChanging,quitting,diagnosing});
+    ready();
     setMaintenance(true);let launched=false;let finishMaintenance!:()=>void;
     maintenanceDone=new Promise<void>(resolve=>{finishMaintenance=resolve});
     try{
+      await taskScheduler.chain;ready();
       const result=await updates.install(async({candidate,update,repo,onStage}:any)=>{
         const schema=(await service.call('overview')).schemaVersion;
         return installUpdate({
           validate:()=>validateCandidate({directory:path.join(app.getPath('userData'),'updates'),candidate,update,repo,current:app.getVersion(),schema,verify:(file:string)=>verifyInstallerPublisher(file,process.execPath)}),
-          quiesce:async()=>{await autoSync.pending;await recapScheduler.pending;await modelRecap.stop();await research.stop();await service.call('jobs.cancelAll')},
+          quiesce:async()=>{ready();await copilot.stop();await autoSync.pending;await recapScheduler.pending;await modelRecap.stop();await research.stop();await service.call('jobs.cancelAll')},
           backup:()=>service.callToCompletion('backup.create'),
           stop:()=>service.stop(),restart:()=>service.start(),launch:launchInstaller,
-          canLaunch:()=>!quitting,onStage,
+          canLaunch:()=>{ready();return !quitting},onStage,
         });
       });
       launched=result.launched;
@@ -412,7 +429,7 @@ function registerIPC(){
   handle('stock:credential:status',p=>{noParams(p);return credentials()});
   handle('stock:credential:save',saveToken);
   handle('stock:provider:diagnose',async endpoint=>{
-    if(typeof endpoint!=='string'||!['stock_basic','trade_cal','daily','adj_factor','daily_basic','income','balancesheet','cashflow','index_daily','daily_info','sz_daily_info','anns_d'].includes(endpoint))throw Error('不支持此数据接口。');
+    if(!matchesContract('ProviderEndpoint',endpoint))throw Error('不支持此数据接口。');
     return providerCall('provider.diagnose',{endpoint});
   });
   handle('stock:service:status',p=>{noParams(p);return serviceStatus()});
@@ -441,6 +458,7 @@ else{
     presence=new DesktopPresence({Tray,Menu,nativeImage,Notification,getWindow:()=>window,quit:()=>app.quit()});
     updates=new UpdateController({directory:path.join(app.getPath('userData'),'updates'),current:app.getVersion(),getSchema:async()=>(await service.call('overview')).schemaVersion,verify:(file:string,signal:AbortSignal)=>verifyInstallerPublisher(file,process.execPath,{signal})});
     await updates.initialize();
+    updateChecks=new UpdateCheckScheduler(updates);updateChecks.start();
     autoSync=new AutoSyncScheduler({demand:true,callService:(method:string,params:any)=>service.call(method,params,30000),getToken:dataToken,canRun:()=>!quitting&&!maintenance&&!diagnosing&&service?.status.state==='ready'});
     recapScheduler=new RecapScheduler({callService:()=>Promise.reject(Error('第一轮自动复盘已停用。')),canRun:()=>false,notify:()=>{}});
     const env:NodeJS.ProcessEnv={};for(const key of ['SystemRoot','WINDIR','TEMP','TMP','PATH','LOCALAPPDATA'])if(process.env[key])env[key]=process.env[key];
@@ -453,7 +471,7 @@ else{
     if(profile===null){app.quit();return}
     processGuard=new ProcessGuard(command,[...args],env);await processGuard.start();
     args.push('--budget-dir',path.join(app.getPath('userData'),'model-budget'),'--data-dir',profile);
-    service=new ServiceClient(command,args,{env,protect:(child:any)=>processGuard.protect(child)});service.on('status',publishServiceStatus);
+    service=new ServiceClient(command,args,{env,protect:(child:any)=>processGuard.protect(child)});service.on('status',publishServiceStatus);service.on('dataChanged',(domain:string)=>{if(window&&!window.isDestroyed())window.webContents.send('stock:data:changed',domain)});
     const codexBinary=app.isPackaged?path.join(process.resourcesPath,'codex','codex.exe'):path.join(root,'node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe');
     codexAccount=new CodexAccount({binary:codexBinary,home:path.join(app.getPath('userData'),'research-codex'),evidencePath:app.isPackaged?path.join(process.resourcesPath,'codex-readonly-probe.json'):path.join(root,'validation/codex-readonly-probe.json'),openExternal:(url:string)=>shell.openExternal(url),protect:(child:any)=>processGuard.protect(child)});
     try{const mode=JSON.parse(await fs.readFile(authPreference(),'utf8'));if(mode==='api'||mode==='custom')researchAuthMode=mode}catch{}
@@ -498,7 +516,7 @@ else{
     modelRecap=new ModelRecapController({callService:(method:string,params:any)=>service.call(method,params,30000),getKey:async()=>(await modelConfig()).apiKey,canRun:()=>!quitting&&!maintenance&&!diagnosing&&!modelRecapConfiguring&&!research.status()&&service?.status.state==='ready',protectHost:(child:any)=>processGuard.protect(child),spawnHost:()=>utilityProcess.fork(path.join(__dirname,'../agent/recap-worker.mjs'),[],{env,stdio:'ignore',serviceName:'Stock Model Recap'})});
     registerIPC();
     Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Stock',submenu:[{role:'quit',label:'退出'}]},{label:'视图',submenu:[{role:'resetZoom',label:'实际大小'},{role:'zoomIn',label:'放大'},{role:'zoomOut',label:'缩小'},{role:'togglefullscreen',label:'全屏'}]}]));
-    taskScheduler=new TaskScheduler({file:path.join(app.getPath('userData'),'scheduler.json'),project:async()=>(await copilot.location()).path,
+    taskScheduler=new TaskScheduler({blocker:()=>{const threadId=copilot.session?.active.keys().next().value??copilot.session?.busy.values().next().value??[...copilot.requests.values()][0]?.params.threadId;return {threadId,message:threadId?'Codex 正在处理另一会话':accountChanging?'账号配置正在更新':maintenance?'资料维护正在进行':diagnosing?'诊断正在进行':copilot.connecting?'Codex 正在连接':'数据服务尚未就绪'}},file:path.join(app.getPath('userData'),'scheduler.json'),project:async()=>(await copilot.location()).path,
       canRun:()=>!quitting&&!maintenance&&!accountChanging&&!diagnosing&&!copilot.busy()&&service?.status.state==='ready',
       publish:()=>{if(window&&!window.isDestroyed())window.webContents.send('stock:scheduler:changed')},
       run:async(task:any,started:Function)=>{if((await copilot.location()).path!==task.project)throw Error('项目已切换。');const session=await copilot.connect();const threadId=task.threadId??(await session.create()).thread.id;await started(threadId);await session.transport.request('thread/name/set',{threadId,name:task.name});if(quitting||maintenance||taskScheduler.stopped)throw Error('应用正在停止调度。');await session.send(threadId,task.prompt,{permissionMode:task.permissionMode});}
@@ -510,7 +528,7 @@ else{
     powerMonitor.on('resume',()=>void tickRecap());
   }).catch(()=>app.quit());
   app.on('window-all-closed',()=>app.quit());
-  app.on('before-quit',event=>{if(quitting)return;event.preventDefault();if(windowDraftBlocked){presence?.show();return}quitting=true;void taskScheduler?.stop();autoSync?.stop();recapScheduler?.stop();clearInterval(recapTimer);presence?.shutdown();credentialStore.clearSession();codexAccount?.stop();Promise.all([taskScheduler?.chain,codexSandbox?.stop(),maintenanceDone,updates?.shutdown(),autoSync?.pending,recapScheduler?.pending]).then(()=>modelRecap?.stop()).then(()=>research?.stop()).then(()=>copilot?.stop()).then(()=>service?.stop()).finally(()=>processGuard?.stop()).finally(()=>app.quit())});
+  app.on('before-quit',event=>{if(quitting)return;event.preventDefault();if(windowDraftBlocked){presence?.show();return}quitting=true;void updateChecks?.stop();void taskScheduler?.stop();autoSync?.stop();recapScheduler?.stop();clearInterval(recapTimer);presence?.shutdown();credentialStore.clearSession();codexAccount?.stop();void shutdownResources([()=>Promise.allSettled([taskScheduler?.chain,codexSandbox?.stop(),maintenanceDone,updates?.shutdown(),autoSync?.pending,recapScheduler?.pending]),()=>modelRecap?.stop(),()=>research?.stop(),()=>copilot?.stop(),()=>service?.stop(),()=>processGuard?.stop()]).finally(()=>app.quit())});
 }
 
 

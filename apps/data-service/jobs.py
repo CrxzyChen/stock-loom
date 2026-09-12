@@ -14,11 +14,14 @@ from breadth_data import fetch_breadth
 from sector_data import fetch_sectors, SECTOR_FIELDS
 import job_ledger
 from transactions import atomic
+from reference_data import request as reference_request, fetch_reference
 
-KINDS=('catalog.sync','calendar.sync','bars.sync','financials.sync','index.sync','market.sync','breadth.sync','sectors.sync','sector.history.sync')
+KINDS=('reference.sync','announcements.sync','catalog.sync','calendar.sync','bars.sync','financials.sync','index.sync','market.sync','breadth.sync','sectors.sync','sector.history.sync')
 
 
 def requests(kind,p):
+    if kind=='reference.sync':return [reference_request(p)]
+    if kind=='announcements.sync':return [('anns_d',{'ts_code':p['instrumentId'],'start_date':p['start'],'end_date':p['end']},'ts_code,ann_date,title,url,rec_time')]
     if kind in ('breadth.sync','sectors.sync'):return []
     if kind=='sector.history.sync':return [('sw_daily',{'ts_code':p['sectorId'],'start_date':p['start'],'end_date':p['end']},SECTOR_FIELDS)]
     if kind=='market.sync':return [market_request(p['marketId'],p['start'],p['end'])]
@@ -41,12 +44,12 @@ class Jobs:
     def enqueue(self,params):
         if set(params)!={'kind','params','token'} or params['kind'] not in KINDS or not isinstance(params['params'],dict):raise ProviderError('INVALID_PARAMS','任务参数无效。')
         kind,p=params['kind'],params['params']
-        expected={'catalog.sync':{'exchange','status'},'calendar.sync':{'exchange','year'},'bars.sync':{'instrumentId','start','end'},'financials.sync':{'instrumentId','endpoint','start','end'},'index.sync':{'indexId','start','end'},'market.sync':{'marketId','start','end'},'breadth.sync':{'date'},'sectors.sync':{'date'},'sector.history.sync':{'sectorId','start','end'}}[kind]
+        expected={'reference.sync':{'endpoint','instrumentId','start','end'},'announcements.sync':{'instrumentId','start','end'},'catalog.sync':{'exchange','status'},'calendar.sync':{'exchange','year'},'bars.sync':{'instrumentId','start','end'},'financials.sync':{'instrumentId','endpoint','start','end'},'index.sync':{'indexId','start','end'},'market.sync':{'marketId','start','end'},'breadth.sync':{'date'},'sectors.sync':{'date'},'sector.history.sync':{'sectorId','start','end'}}[kind]
         if set(p)!=expected or len(json.dumps(p))>1024:raise ProviderError('INVALID_PARAMS','任务参数无效。')
         # Reuse domain validation without network or writes: stop at its first fetch call.
         class Validated(Exception):pass
         def probe(*args):raise Validated()
-        method={'catalog.sync':self.sync_catalog,'calendar.sync':self.sync_calendar,'bars.sync':self.sync_bars,'financials.sync':self.sync_financials,'index.sync':self.sync_index,'market.sync':self.sync_market,'breadth.sync':self.sync_breadth,'sectors.sync':self.sync_sectors,'sector.history.sync':self.sync_sector_history}[kind]
+        method={'reference.sync':self.sync_reference,'announcements.sync':self.sync_announcements,'catalog.sync':self.sync_catalog,'calendar.sync':self.sync_calendar,'bars.sync':self.sync_bars,'financials.sync':self.sync_financials,'index.sync':self.sync_index,'market.sync':self.sync_market,'breadth.sync':self.sync_breadth,'sectors.sync':self.sync_sectors,'sector.history.sync':self.sync_sector_history}[kind]
         try:method({**p,'token':params['token']},probe)
         except Validated:pass
         token=params['token']
@@ -136,9 +139,9 @@ class Jobs:
             row=self.db.execute('SELECT kind,params FROM jobs WHERE id=?',(id,)).fetchone();kind=row['kind'];p=json.loads(row['params'])
             try:
                 def cached(_token,api,params,fields):return payload[api]
-                method={'catalog.sync':self.sync_catalog,'calendar.sync':self.sync_calendar,'bars.sync':self.sync_bars,'financials.sync':self.sync_financials,'index.sync':self.sync_index,'market.sync':self.sync_market,'breadth.sync':self.sync_breadth,'sectors.sync':self.sync_sectors,'sector.history.sync':self.sync_sector_history}[kind]
+                method={'reference.sync':self.sync_reference,'announcements.sync':self.sync_announcements,'catalog.sync':self.sync_catalog,'calendar.sync':self.sync_calendar,'bars.sync':self.sync_bars,'financials.sync':self.sync_financials,'index.sync':self.sync_index,'market.sync':self.sync_market,'breadth.sync':self.sync_breadth,'sectors.sync':self.sync_sectors,'sector.history.sync':self.sync_sector_history}[kind]
                 with atomic(self.db):
-                    result=method({**p,'token':token},cached)
+                    result=self.sync_reference({**p,'token':token},prepared=payload[p['endpoint']]) if kind=='reference.sync' else method({**p,'token':token},cached)
                     if not job_ledger.finish(self.db,id,generation,'succeeded',result=result):
                         raise ProviderError('STALE_ATTEMPT','任务执行版本已失效，结果未发布。')
             except ProviderError as e:
@@ -157,7 +160,7 @@ class Jobs:
         if generation is None:return
         def work():
             try:
-                result=fetch_breadth(token,params['date'],fetch) if row['kind']=='breadth.sync' else fetch_sectors(token,params['date'],fetch) if row['kind']=='sectors.sync' else incremental.execute(plan,fetch,token)
+                result={params['endpoint']:fetch_reference(token,params,fetch)} if row['kind']=='reference.sync' else fetch_breadth(token,params['date'],fetch) if row['kind']=='breadth.sync' else fetch_sectors(token,params['date'],fetch) if row['kind']=='sectors.sync' else incremental.execute(plan,fetch,token)
                 self.job_results.put((id,generation,result,None))
             except ProviderError as e:self.job_results.put((id,generation,None,e.code+': '+e.message))
             except Exception:self.job_results.put((id,generation,None,'网络任务失败，请重试。'))

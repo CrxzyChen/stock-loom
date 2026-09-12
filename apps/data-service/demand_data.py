@@ -35,6 +35,14 @@ class DemandData:
         if not instrument:raise ProviderError('INSTRUMENT_NOT_FOUND','本地目录没有该股票，请先同步股票目录。')
         now=now or dt.datetime.now(dt.timezone.utc);local=now.astimezone(dt.timezone(dt.timedelta(hours=8)))
         cutoff=local.date() if (local.hour,local.minute)>=(16,0) else local.date()-dt.timedelta(days=1)
+        daily=p['endpoint'] in ('bars','daily_basic')
+        listed=dt.date.fromisoformat(instrument['list_date']) if instrument['list_date'] else None
+        delisted=dt.date.fromisoformat(instrument['delist_date']) if instrument['delist_date'] else None
+        if daily and listed and listed>cutoff:
+            return {'state':'disabled','message':'尚未到上市交易日，暂无可同步行情。','jobIds':[]}
+        if daily and instrument['list_status']=='D':
+            if not delisted:return {'state':'disabled','message':'已退市，缺少退市日期；可查看已保存的历史行情。','jobIds':[]}
+            cutoff=min(cutoff,delisted)
         exchange='SZSE' if p['instrumentId'].endswith('.SZ') else 'SSE'
         # Require an actual exchange calendar, never infer holidays from weekdays.
         for year in sorted({cutoff.year,local.year}):
@@ -44,6 +52,8 @@ class DemandData:
         target=self.db.execute('SELECT MAX(cal_date) FROM trading_calendar WHERE exchange=? AND is_open=1 AND cal_date<=?',(exchange,cutoff.strftime('%Y%m%d'))).fetchone()[0]
         if not target:
             return self.demand_job('calendar.sync',{'exchange':exchange,'year':cutoff.year-1},p['token'],p['force'],now,86400)
+        if daily and listed and target<listed.strftime('%Y%m%d'):
+            return {'state':'disabled','message':'上市后尚无已收盘交易日。','jobIds':[]}
         endpoint=p['endpoint']
         for active in self.db.execute("SELECT id,kind,params FROM jobs WHERE state IN ('queued','running','retry_wait')"):
             args=json.loads(active['params'])
@@ -51,10 +61,10 @@ class DemandData:
                 return {'state':'updating','message':'正在更新','jobIds':[active['id']]}
         daily=endpoint in ('bars','daily_basic');end=target if daily else local.strftime('%Y%m%d')
         end_date=dt.datetime.strptime(end,'%Y%m%d').date()
-        years=p['years'] if endpoint=='bars' else 3 if not daily else 1
+        years=p['years'] if daily else 3
         try:start=end_date.replace(year=end_date.year-years).strftime('%Y%m%d')
         except ValueError:start=end_date.replace(year=end_date.year-years,day=28).strftime('%Y%m%d')
-        if endpoint=='daily_basic':start=(end_date-dt.timedelta(days=14)).strftime('%Y%m%d')
+        if daily and listed:start=max(start,listed.strftime('%Y%m%d'))
         dataset='daily:'+p['instrumentId'] if endpoint=='bars' else 'financial:'+p['instrumentId']+':'+endpoint
         row=self.db.execute('SELECT manifest FROM snapshots WHERE dataset=? ORDER BY rowid DESC LIMIT 1',(dataset,)).fetchone()
         if row:
@@ -66,6 +76,7 @@ class DemandData:
             # Preserve already downloaded history when extending its end date.
             earliest=(end_date-dt.timedelta(days=1460 if endpoint=='bars' else 1825)).strftime('%Y%m%d')
             start=min(start,max(earliest,request['start_date']))
+        if daily and listed:start=max(start,listed.strftime('%Y%m%d'))
         params={'instrumentId':p['instrumentId'],'start':start,'end':end}
         if endpoint!='bars':params['endpoint']=endpoint
         return self.demand_job('bars.sync' if endpoint=='bars' else 'financials.sync',params,p['token'],p['force'],now,max(policy['intervalMinutes']*60,86400 if not daily else 3600))

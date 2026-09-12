@@ -38,3 +38,11 @@ test('installation requires verified candidate, locks concurrent actions and shu
   assert.equal(controller.status().state,'failed');assert.equal(controller.downloaded,null);assert.equal(controller.update,null);
 });
 
+
+test('channel defaults, persistence and invalid configuration preserve trusted selection',async()=>{
+ let selected;const controller=await fixture({current:'0.2.0-alpha.1',check:async p=>{selected=p.channel;return {available:false,update:null}}});
+ await controller.initialize();assert.equal(controller.status().channel,'preview');assert.equal(controller.status().repo,'CrxzyChen/stock-loom');
+ await controller.configure('owner/repo','stable');await controller.run('check');assert.equal(selected,'stable');assert.equal(controller.status().state,'current');
+ const reopened=new UpdateController({directory:controller.directory,current:'0.2.0-beta.1',getSchema:async()=>5});await reopened.initialize();assert.equal(reopened.status().channel,'stable');
+ await assert.rejects(reopened.configure('owner/repo','invalid'),/渠道/);assert.equal(reopened.status().channel,'stable');
+});

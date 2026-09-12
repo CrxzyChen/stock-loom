@@ -13,12 +13,15 @@ from provider import diagnose, ENDPOINTS, ProviderError
 from catalog import Catalog
 from watchlists import Watchlists
 from holdings import Holdings, migrate_holdings
+from position_ledger import PositionLedger, migrate_position_ledger
 from bars import Bars
 from financials import Financials
 from index_data import IndexData
 from market_data import MarketData
 from breadth_data import BreadthData
 from sector_data import SectorData
+from announcement_data import AnnouncementData
+from reference_data import ReferenceData, catalogue
 from jobs import Jobs
 from screening import Screening
 from research import Research
@@ -44,7 +47,7 @@ class DomainError(Exception):
         self.code, self.message = code, message
 
 
-class Store(SectorData, BreadthData, DemandData, Catalog, Watchlists, Holdings, Bars, Financials, IndexData, MarketData, Jobs, Screening, Research, ResearchCharts, Backups, Recap, RecapBudget, RecapModel, AutoSync, ScreenPreparation, BundleConversion):
+class Store(ReferenceData, PositionLedger, AnnouncementData, SectorData, BreadthData, DemandData, Catalog, Watchlists, Holdings, Bars, Financials, IndexData, MarketData, Jobs, Screening, Research, ResearchCharts, Backups, Recap, RecapBudget, RecapModel, AutoSync, ScreenPreparation, BundleConversion):
     def __init__(self, root, budget_root=None):
         self.root = pathlib.Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
@@ -136,6 +139,7 @@ class Store(SectorData, BreadthData, DemandData, Catalog, Watchlists, Holdings, 
             self.db.executescript('BEGIN IMMEDIATE; PRAGMA user_version=6; COMMIT;')
         if version < 7:migrate_job_ledger(self.db,self.root)
         if version < 8:migrate_holdings(self.db,self.root)
+        if version < 9:migrate_position_ledger(self.db,self.root)
         self.db.execute('CREATE INDEX IF NOT EXISTS snapshots_dataset ON snapshots(dataset)')
         self.db.execute('INSERT OR IGNORE INTO settings VALUES (?, ?)', ('preferences', json.dumps({'colorMode': 'red-up', 'closeToTray': False})))
         self.db.commit()
@@ -261,6 +265,13 @@ class Store(SectorData, BreadthData, DemandData, Catalog, Watchlists, Holdings, 
         if method=='jobs.events':return self.read_job_events(params)
         if method=='jobs.cancel':return self.cancel_job(params)
         if method=='jobs.cancelAll':return self.cancel_all_jobs(params)
+        if method == 'ledger.read': return self.ledger_read(params)
+        if method == 'ledger.write': return self.ledger_write(params)
+        if method == 'reference.catalog': return catalogue()
+        if method == 'reference.read': return self.read_reference(params)
+        if method == 'reference.sync': return self.sync_reference(params)
+        if method == 'announcements.read': return self.read_announcements(params)
+        if method == 'announcements.sync': return self.sync_announcements(params)
         if method == 'financials.sync': return self.sync_financials(params)
         if method == 'index.sync': return self.sync_index(params)
         if method == 'index.read': return self.read_index(params)

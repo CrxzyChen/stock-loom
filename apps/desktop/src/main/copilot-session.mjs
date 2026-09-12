@@ -11,19 +11,24 @@ const pageCursor=value=>{if(value!==null&&(typeof value!=='string'||!value.lengt
 export class CopilotSession extends EventEmitter{
   constructor({transport,cwd,threadOptions={}}){
     super();this.transport=transport;this.cwd=cwd;this.threadOptions=threadOptions;
-    this.loaded=new Set();this.busy=new Set();this.active=new Map();this.known=new Set();this.fresh=new Set();
+    this.loaded=new Set();this.busy=new Set();this.active=new Map();this.known=new Set();this.fresh=new Set();this.requests=new Map();
     transport.on('notification',event=>{
-      const p=event.params,id=p?.threadId??p?.thread?.id;
+      let p=event.params;const id=p?.threadId??p?.thread?.id??(event.method==='serverRequest/resolved'?this.requests.get(p?.requestId):undefined);
       if(!id||!this.known.has(id))return;
+      if(event.method==='serverRequest/resolved'){
+        this.requests.delete(p.requestId);
+        p={...p,threadId:id,pendingRequests:[...this.requests.values()].filter(thread=>thread===id).length};
+        event={...event,params:p};
+      }
       if(event.method==='turn/started'&&p.turn?.id)this.active.set(id,p.turn.id);
       if(event.method==='turn/completed')this.active.delete(id);
       this.emit('notification',event);
     });
     transport.on('request',event=>{
-      if(this.known.has(event.params?.threadId))this.emit('request',event);
+      if(this.known.has(event.params?.threadId)){this.requests.set(event.id,event.params.threadId);this.emit('request',event)}
       else transport.rejectRequest(event.id);
     });
-    transport.on('state',state=>{if(state==='stopped'){this.loaded.clear();this.active.clear()}this.emit('state',state)});
+    transport.on('state',state=>{if(state==='stopped'){this.loaded.clear();this.active.clear();this.requests.clear()}this.emit('state',state)});
   }
   async start(){this.cwd=await fs.realpath(this.cwd);await this.transport.start()}
   async sameProject(cwd){

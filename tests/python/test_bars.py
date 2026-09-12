@@ -22,6 +22,15 @@ class BarsTests(unittest.TestCase):
         self.params={'token':'synthetic','instrumentId':'000001.SZ','start':'20240101','end':'20240131'}
         self.daily=[{'ts_code':'000001.SZ','trade_date':date,'open':price,'high':price+1,'low':price-1,'close':price,'vol':2.5,'amount':3.2} for date,price in [('20240102',20),('20240103',10)]]
         self.factors=[{'ts_code':'000001.SZ','trade_date':date,'adj_factor':factor} for date,factor in [('20240102',1),('20240103',2)]]
+    def test_missing_sessions_are_not_filled_and_zero_volume_is_preserved(self):
+        self.daily=[{**self.daily[0],'trade_date':'20240102'}, {**self.daily[1],'trade_date':'20240119','vol':0}]
+        self.factors=[{'ts_code':'000001.SZ','trade_date':r['trade_date'],'adj_factor':1} for r in self.daily]
+        snapshot=self.store.sync_bars(self.params,self.fetch)
+        for mode in ['none','forward','backward']:
+            rows=self.read(snapshot['snapshotId'],mode)['items']
+            self.assertEqual([r['date'] for r in rows],['20240102','20240119'])
+            self.assertEqual(rows[1]['volume'],0)
+            self.assertGreater(rows[1]['close'],0)
     def tearDown(self):self.store.close()
     def fetch(self,token,api,params,fields):return self.daily if api=='daily' else self.factors
     def read(self,id,adjustment='none'):return self.store.read_bars({'snapshotId':id,'adjustment':adjustment,'offset':0})

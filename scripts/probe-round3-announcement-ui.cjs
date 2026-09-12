@@ -1,0 +1,31 @@
+const {app,ipcMain}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const directory=fs.mkdtempSync(path.resolve('.runtime/tests/announcement-ui-'));app.setPath('userData',directory);app.disableHardwareAcceleration();
+const stock={id:'000001.SZ',name:'公告展示样例',exchange:'SZSE',listStatus:'L',listDate:'2099-01-01',delistDate:null};
+const announcements=Array.from({length:51},(_,i)=>({id:String(i),instrumentId:stock.id,date:'20260901',title:'公告样例 '+i,url:'https://static.cninfo.com.cn/fixture.pdf',publishedAt:null}));let opened=null,fail=true;
+const handlers={'stock:announcements:read':(_,p)=>({snapshotId:'a',instrumentId:stock.id,start:'20260601',end:'20260912',collectedAt:new Date().toISOString(),total:51,offset:p.offset,items:announcements.slice(p.offset,p.offset+50)}),'stock:announcements:sync':()=>{if(fail)throw Error('PERMISSION: 公告权限不足');return {snapshotId:'a',rows:51}},'stock:announcements:open':(_,p)=>{opened=p.id},'stock:instruments:search':()=>({items:[stock],total:1,offset:0}),'stock:data:ensure':()=>({state:'disabled',message:'尚未到上市交易日，暂无可同步行情。',jobIds:[]}),'stock:bars:versions':()=>[],'stock:quotes:latest':()=>[]};
+const handle=ipcMain.handle.bind(ipcMain);ipcMain.handle=(c,l)=>handle(c,handlers[c]??l);
+const result={passed:false,fixture:true,checks:[]};let started=false;const timer=setTimeout(()=>finish(Error('timeout')),35000);
+function finish(e){clearTimeout(timer);result.passed=!e;if(e)result.error=e.stack;fs.writeFileSync('validation/round3-announcement-ui.json',JSON.stringify(result,null,2));app.exit(e?1:0)}
+app.on('browser-window-created',(_,win)=>{if(started)return;started=true;win.webContents.once('did-finish-load',()=>void(async()=>{
+ const js=s=>win.webContents.executeJavaScript(s),wait=async s=>{for(let n=0;n<160;n++){if(await js(s))return;await new Promise(r=>setTimeout(r,50))}throw Error(s)};
+ await wait(`window.stock.serviceStatus().then(s=>s.state==='ready')`);const p=await js('window.stock.copilotProject()');
+ await js(`localStorage.setItem('stock.workspace.v2:'+${JSON.stringify(p.path)},JSON.stringify({version:1,tabs:['stock:000001.SZ'],active:'stock:000001.SZ',panel:'stocks'}))`);
+ await new Promise(r=>{win.webContents.once('did-finish-load',r);win.webContents.reload()});
+ await wait(`!!document.querySelector('.stock-detail-tabs')`);
+ await js(`Array.from(document.querySelectorAll('.stock-detail-tabs button')).find(b=>b.textContent==='公告').click()`);
+ await wait(`document.querySelectorAll('.announcement-panel li').length===50`);
+ await js(`Array.from(document.querySelectorAll('.announcement-pages button')).find(b=>b.textContent.includes('下一页')).click()`);
+ await wait(`document.querySelectorAll('.announcement-panel li').length===1`);
+ await js(`document.querySelector('.announcement-panel li button').click()`);assert.equal(opened,'50');
+ await js(`document.querySelector('.announcement-panel form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))`);
+ await wait(`document.querySelector('.announcement-panel [role=alert]')?.textContent.includes('权限不足')`);
+ assert.equal(await js(`document.querySelectorAll('.announcement-panel li').length`),1);
+ result.checks.push('50-row pagination reaches last announcement','open passes source record ID','permission failure preserves previous page');
+fail=false;await js(`document.querySelector('[aria-label="重试公告"]').click()`);
+ await wait(`document.querySelectorAll('.announcement-panel li').length===50&&!document.querySelector('.announcement-panel [role=alert]')`);
+ result.checks.push('retry succeeds and restores first page without stale error');
+ win.setSize(900,800);await js(`document.querySelector('.announcement-panel').scrollIntoView()`);await new Promise(r=>setTimeout(r,200));
+ assert.ok(await js(`document.querySelector('.announcement-panel').scrollWidth<=document.querySelector('.announcement-panel').clientWidth+1`));
+ result.screenshot=path.join(directory,'announcements.png');fs.writeFileSync(result.screenshot,(await win.webContents.capturePage()).toPNG());
+ result.checks.push('900px window has no announcement horizontal overflow');finish();
+ })().catch(finish))});require(path.resolve('dist/main/main.cjs'));

@@ -121,7 +121,7 @@ class ResearchTests(unittest.TestCase):
         old.close()
         migrated=Store(target)
         try:
-            self.assertEqual(migrated.overview()['schemaVersion'],8)
+            self.assertEqual(migrated.overview()['schemaVersion'],9)
             self.assertEqual(migrated.lists()[0]['name'],'迁移前分组')
             self.assertEqual(migrated.db.execute('SELECT stage FROM research_events WHERE run_id=?',('old-run',)).fetchone()[0],'failed')
             backup=sqlite3.connect(next((target/'backups').glob('pre-schema-5-*.sqlite')))

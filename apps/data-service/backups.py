@@ -61,6 +61,10 @@ class Backups:
         for row in self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset LIKE 'financial:%'"):
             manifest=json.loads(row['manifest'])
             self.checked_financial_rows(row,manifest['endpoint'])
+        for row in self.db.execute("SELECT id,manifest,dataset FROM snapshots WHERE dataset LIKE 'announcements:%'"):
+            self.checked_announcement(row,row['dataset'].split(':',1)[1])
+        for row in self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset LIKE 'reference:%'"):
+            self.checked_reference(row)
         def add(file):
             resolved=file.resolve()
             if not resolved.is_relative_to(self.root) or not resolved.is_file():raise ProviderError('BACKUP_SOURCE','备份来源文件缺失或越界。')

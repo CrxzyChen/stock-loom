@@ -1,4 +1,6 @@
 export const buttonIcons:Record<string,string>={
+  "zoom-in":"M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0M6 10h8M10 6v8",
+  "zoom-out":"M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0M6 10h8",
   "tray": "M12 3v10m-4-4 4 4 4-4M4 14v6h16v-6M4 16h4l2 2h4l2-2h4",
   "power": "M12 3v9M7 5a9 9 0 1 0 10 0",
   "undo": "M9 5 4 10l5 5M4 10h10a6 6 0 0 1 0 12",

@@ -43,7 +43,11 @@ export class ServiceClient extends EventEmitter {
           if(!pending)continue;clearTimeout(pending.timer);this.pending.delete(response.requestId);
             if(response.error)pending.reject(new ServiceRpcError(response.error.code,response.error.message,response.requestId,response));
             else if(!matchesRpcResponse(pending.method,response.result))pending.reject(new ServiceRpcError('INVALID_RESPONSE','本地服务返回格式不正确，请检查应用版本和资料完整性。',response.requestId));
-            else pending.resolve(pending.withMetadata?response:response.result);
+            else {
+              pending.resolve(pending.withMetadata?response:response.result);
+              if(pending.method==='ledger.write')this.emit('dataChanged','holdings');
+              if(['holdings.save','watchlists.create','watchlists.rename','watchlists.add','watchlists.remove','watchlists.reorder'].includes(pending.method))this.emit('dataChanged',pending.method.split('.')[0]);
+            }
         }catch{this.failPending('数据服务协议响应不正确');child.kill();return}
       }
     });

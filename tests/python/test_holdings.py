@@ -24,13 +24,13 @@ class HoldingsTests(unittest.TestCase):
             p={'instrumentId':code,'quantity':100,'costPrice':'10.1250','asOf':'2026-09-11','revision':0};store.holdings_save(p)
             summary=store.dispatch('holdings.summary',{});row=summary['items'][0]
             self.assertEqual(summary['marketValue'],'1200.00');self.assertEqual(summary['floatingProfit'],'187.50');self.assertEqual(row['price'],'12.0');self.assertEqual(row['pricedHoldingsPercent'],'100.00')
-            store.holdings_save({**p,'revision':1,'asOf':'2026-09-12'})
-            summary=store.holdings_summary({});self.assertEqual(summary['items'][0]['status'],'priceBeforeHolding');self.assertIsNone(summary['marketValue'])
-            store.holdings_save({**p,'revision':2,'costPrice':None});self.assertIsNone(store.holdings_summary({})['floatingProfit'])
-            store.holdings_save({**p,'revision':3,'costPrice':'0'});self.assertIsNone(store.holdings_summary({})['items'][0]['profitPercent'])
+            store.holdings_save({**p,'revision':1,'costPrice':None});self.assertIsNone(store.holdings_summary({})['floatingProfit'])
+            store.holdings_save({**p,'revision':2,'costPrice':'0'});self.assertIsNone(store.holdings_summary({})['items'][0]['profitPercent'])
             store.holdings_save({**p,'instrumentId':'600001.SH','revision':0})
             summary=store.holdings_summary({});self.assertEqual(summary['missingPriceCount'],1);self.assertEqual(summary['pricedMarketValue'],'1200.00');self.assertIsNone(summary['marketValue']);self.assertIsNone(summary['floatingProfit'])
             store.holdings_save({**p,'instrumentId':'600001.SH','revision':1,'quantity':0});self.assertEqual(store.holdings_summary({})['missingPriceCount'],0)
+            store.holdings_save({**p,'revision':3,'asOf':'2026-09-12'})
+            summary=store.holdings_summary({});self.assertEqual(summary['items'][0]['status'],'priceBeforeHolding');self.assertIsNone(summary['marketValue'])
         finally:store.close()
     def test_positions_persist_and_reject_stale_or_invalid_updates(self):
         folder=tempfile.mkdtemp(dir=pathlib.Path(__file__).resolve().parents[2]/'.runtime/tests')

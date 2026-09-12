@@ -18,7 +18,7 @@ async function cancel(){await action(async()=>{account.value=await window.stock!
 async function logout(){await action(async()=>{account.value=await window.stock!.accountLogout()})}
 async function select(event:Event){const value=(event.target as HTMLSelectElement).value;await action(async()=>{account.value=await window.stock!.accountModel(value)})}
 async function switchMode(value:'chatgpt'|'api'|'custom'){if(value===mode.value)return;await action(async()=>{account.value=await window.stock!.accountMode(value);mode.value=value});if(mode.value==='chatgpt'&&!error.value)await refresh()}
-async function saveApi(){await action(async()=>{const key=apiKey.value;apiKey.value='';const result=await window.stock!.saveModel(apiModel.value.trim(),key);apiReady.value=result.configured;saved.value=true})}
+async function saveApi(){await action(async()=>{const key=apiKey.value;const result=await window.stock!.saveModel(apiModel.value.trim(),key);apiKey.value='';apiReady.value=result.configured;saved.value=true})}
 onMounted(async()=>{
   if(!window.stock)return;
   await action(async()=>{const state=await window.stock!.accountStatus();account.value=state;mode.value=state.mode??'chatgpt';const api=await window.stock!.modelStatus();apiModel.value=api.model;apiReady.value=api.configured});

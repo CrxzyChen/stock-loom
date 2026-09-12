@@ -24,3 +24,4 @@ __pycache__/
 !/validation/codex-mcp-electron-probe.json
 /docs/*
 !/docs/alpha-release.md
+!/docs/beta-release.md

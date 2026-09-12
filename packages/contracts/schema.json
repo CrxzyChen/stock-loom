@@ -2,6 +2,846 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Stock boundary contracts",
   "$defs": {
+    "ReferenceEndpoint": {
+      "enum": [
+        "stock_company",
+        "namechange",
+        "stk_managers",
+        "stk_rewards",
+        "stk_premarket",
+        "stock_st",
+        "st",
+        "stock_hsgt",
+        "bse_mapping",
+        "new_share",
+        "bak_basic",
+        "forecast",
+        "express",
+        "fina_indicator",
+        "fina_mainbz"
+      ]
+    },
+    "ReferenceColumn": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label"
+      ]
+    },
+    "ReferenceDataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/ReferenceEndpoint"
+        },
+        "name": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReferenceColumn"
+          }
+        }
+      },
+      "required": [
+        "endpoint",
+        "name",
+        "mode",
+        "columns"
+      ]
+    },
+    "ReferenceCatalog": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ReferenceDataset"
+      }
+    },
+    "ReferenceParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/ReferenceEndpoint"
+        },
+        "instrumentId": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpoint",
+        "instrumentId",
+        "start",
+        "end"
+      ]
+    },
+    "ReferenceSyncRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/ReferenceEndpoint"
+        },
+        "instrumentId": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpoint",
+        "instrumentId",
+        "start",
+        "end",
+        "token"
+      ]
+    },
+    "ReferenceReadRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/ReferenceEndpoint"
+        },
+        "instrumentId": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "endpoint",
+        "instrumentId",
+        "start",
+        "end",
+        "offset"
+      ]
+    },
+    "ReferenceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/ReferenceEndpoint"
+        },
+        "instrumentId": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReferenceColumn"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "snapshotId": {
+          "type": "string"
+        },
+        "collectedAt": {
+          "type": "string"
+        },
+        "provider": {
+          "const": "tushare"
+        }
+      },
+      "required": [
+        "endpoint",
+        "instrumentId",
+        "start",
+        "end",
+        "columns",
+        "rows",
+        "snapshotId",
+        "collectedAt",
+        "provider"
+      ]
+    },
+    "ReferencePageData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/ReferenceEndpoint"
+        },
+        "instrumentId": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReferenceColumn"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "snapshotId": {
+          "type": "string"
+        },
+        "collectedAt": {
+          "type": "string"
+        },
+        "provider": {
+          "const": "tushare"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "endpoint",
+        "instrumentId",
+        "start",
+        "end",
+        "columns",
+        "rows",
+        "snapshotId",
+        "collectedAt",
+        "provider",
+        "total",
+        "offset"
+      ]
+    },
+    "ReferencePage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferencePageData"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ReferenceSyncResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshotId": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "snapshotId",
+        "rows"
+      ]
+    },
+    "ReferenceJobRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "reference.sync"
+        },
+        "params": {
+          "$ref": "#/$defs/ReferenceParams"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "params",
+        "token"
+      ]
+    },
+    "LedgerBalanceEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "opening",
+            "balance"
+          ]
+        },
+        "date": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "price": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "date",
+        "quantity",
+        "price"
+      ]
+    },
+    "LedgerTradeEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "buy",
+            "sell"
+          ]
+        },
+        "date": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "price": {
+          "type": "string"
+        },
+        "fee": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "date",
+        "quantity",
+        "price",
+        "fee"
+      ]
+    },
+    "LedgerEvent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LedgerBalanceEvent"
+        },
+        {
+          "$ref": "#/$defs/LedgerTradeEvent"
+        }
+      ]
+    },
+    "LedgerWriteRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instrumentId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "event": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LedgerEvent"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "voided": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "instrumentId",
+        "requestId",
+        "revision",
+        "event",
+        "supersedes",
+        "voided"
+      ]
+    },
+    "LedgerWriteResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "eventId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costBasis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "averageCost": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "realizedProfit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "eventId",
+        "revision",
+        "quantity",
+        "costBasis",
+        "averageCost",
+        "realizedProfit"
+      ]
+    },
+    "LedgerReadRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instrumentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrumentId"
+      ]
+    },
+    "LedgerRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "event": {
+          "$ref": "#/$defs/LedgerEvent"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "voided": {
+          "type": "boolean"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "event",
+        "supersedes",
+        "voided",
+        "active",
+        "source",
+        "createdAt"
+      ]
+    },
+    "LedgerReadResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instrumentId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "costBasis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "averageCost": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "realizedProfit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LedgerRecord"
+          }
+        }
+      },
+      "required": [
+        "instrumentId",
+        "revision",
+        "quantity",
+        "costBasis",
+        "averageCost",
+        "realizedProfit",
+        "events"
+      ]
+    },
+    "AnnouncementRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "instrumentId": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "publishedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "instrumentId",
+        "date",
+        "title",
+        "url",
+        "publishedAt"
+      ]
+    },
+    "AnnouncementReadRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instrumentId": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "instrumentId",
+        "offset"
+      ]
+    },
+    "AnnouncementSyncParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instrumentId": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrumentId",
+        "start",
+        "end"
+      ]
+    },
+    "AnnouncementPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshotId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "instrumentId": {
+          "type": "string"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collectedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnnouncementRow"
+          },
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "snapshotId",
+        "instrumentId",
+        "start",
+        "end",
+        "collectedAt",
+        "total",
+        "offset",
+        "items"
+      ]
+    },
+    "AnnouncementSyncRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instrumentId": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrumentId",
+        "start",
+        "end",
+        "token"
+      ]
+    },
+    "AnnouncementSyncResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshotId": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "snapshotId",
+        "rows"
+      ]
+    },
+    "AnnouncementJobRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "announcements.sync"
+        },
+        "params": {
+          "$ref": "#/$defs/AnnouncementSyncParams"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "params",
+        "token"
+      ]
+    },
     "BreadthRow": {
       "type": "object",
       "additionalProperties": false,
@@ -2884,7 +3724,22 @@
         "stk_limit",
         "index_classify",
         "index_member_all",
-        "sw_daily"
+        "sw_daily",
+        "stock_company",
+        "namechange",
+        "stk_managers",
+        "stk_rewards",
+        "stk_premarket",
+        "stock_st",
+        "st",
+        "stock_hsgt",
+        "bse_mapping",
+        "new_share",
+        "bak_basic",
+        "forecast",
+        "express",
+        "fina_indicator",
+        "fina_mainbz"
       ]
     },
     "DiagnosticRequest": {
@@ -3213,6 +4068,12 @@
         },
         {
           "$ref": "#/$defs/SectorHistory"
+        },
+        {
+          "$ref": "#/$defs/AnnouncementSyncResult"
+        },
+        {
+          "$ref": "#/$defs/ReferenceSyncResult"
         }
       ]
     },
@@ -3590,6 +4451,12 @@
         },
         {
           "$ref": "#/$defs/SectorHistoryJobRequest"
+        },
+        {
+          "$ref": "#/$defs/AnnouncementJobRequest"
+        },
+        {
+          "$ref": "#/$defs/ReferenceJobRequest"
         }
       ]
     },
@@ -6061,6 +6928,26 @@
             "valued",
             "dataError"
           ]
+        },
+        "costBasis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "realizedProfit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -6073,7 +6960,9 @@
         "floatingProfit",
         "profitPercent",
         "pricedHoldingsPercent",
-        "status"
+        "status",
+        "costBasis",
+        "realizedProfit"
       ]
     },
     "HoldingsSummary": {
@@ -6125,6 +7014,67 @@
         },
         "weightBasis": {
           "const": "priced-open-holdings-excluding-cash"
+        },
+        "costBasis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "knownCostBasis": {
+          "type": "string"
+        },
+        "unknownCostCount": {
+          "type": "integer"
+        },
+        "realizedProfit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "knownRealizedProfit": {
+          "type": "string"
+        },
+        "unknownRealizedCount": {
+          "type": "integer"
+        },
+        "priceDates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "industries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortfolioIndustry"
+          }
+        },
+        "industryStatus": {
+          "enum": [
+            "ready",
+            "missing",
+            "error"
+          ]
+        },
+        "industryCollectedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -6136,7 +7086,17 @@
         "missingPriceCount",
         "missingCostCount",
         "valuationBasis",
-        "weightBasis"
+        "weightBasis",
+        "costBasis",
+        "knownCostBasis",
+        "unknownCostCount",
+        "realizedProfit",
+        "knownRealizedProfit",
+        "unknownRealizedCount",
+        "priceDates",
+        "industries",
+        "industryStatus",
+        "industryCollectedAt"
       ]
     },
     "HoldingAccount": {
@@ -6473,6 +7433,52 @@
         "offset",
         "items"
       ]
+    },
+    "PortfolioIndustry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "marketValue": {
+          "type": "string"
+        },
+        "holdingCount": {
+          "type": "integer"
+        },
+        "missingPriceCount": {
+          "type": "integer"
+        },
+        "pricedHoldingsPercent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "marketValue",
+        "holdingCount",
+        "missingPriceCount",
+        "pricedHoldingsPercent"
+      ]
     }
   },
   "x-rpc-responses": {
@@ -6567,7 +7573,14 @@
     "sector.history": "SectorHistoryResult",
     "sector.ensure": "DemandState",
     "sectors.summary": "SectorSummaryResult",
-    "sector.members": "SectorMembers"
+    "sector.members": "SectorMembers",
+    "announcements.read": "AnnouncementPage",
+    "announcements.sync": "AnnouncementSyncResult",
+    "ledger.read": "LedgerReadResult",
+    "ledger.write": "LedgerWriteResult",
+    "reference.catalog": "ReferenceCatalog",
+    "reference.read": "ReferencePage",
+    "reference.sync": "ReferenceSyncResult"
   },
   "x-rpc-requests": {
     "settings.save": "Settings",
@@ -6661,6 +7674,13 @@
     "sector.history": "SectorRequest",
     "sector.ensure": "SectorHistoryEnsure",
     "sectors.summary": "NoParams",
-    "sector.members": "SectorMembersRequest"
+    "sector.members": "SectorMembersRequest",
+    "announcements.read": "AnnouncementReadRequest",
+    "announcements.sync": "AnnouncementSyncRequest",
+    "ledger.read": "LedgerReadRequest",
+    "ledger.write": "LedgerWriteRequest",
+    "reference.catalog": "NoParams",
+    "reference.read": "ReferenceReadRequest",
+    "reference.sync": "ReferenceSyncRequest"
   }
 }

@@ -76,6 +76,13 @@ class FinancialTests(unittest.TestCase):
         row=self.read()['items'][0];self.assertEqual(row['total_mv'],1230000);self.assertIsNone(row['pe']);self.assertEqual(row['pe_ttm'],-2)
         with self.assertRaises(ProviderError):self.sync([])
         self.assertEqual(self.read()['items'][0]['total_mv'],1230000)
+    def test_valuation_history_read_does_not_silently_truncate_at_500(self):
+        import datetime as dt
+        self.params['endpoint']='daily_basic'
+        rows=[{'ts_code':'000001.SZ','trade_date':(dt.date(2022,1,1)+dt.timedelta(days=i)).strftime('%Y%m%d'),'close':10,'pe':None,'pe_ttm':-2,'pb':1,'total_mv':123,'circ_mv':100} for i in range(750)]
+        self.sync(rows);data=self.read()
+        self.assertEqual(len(data['items']),750);self.assertEqual(data['items'][-1]['trade_date'],'20220101')
+        self.assertTrue(matches_rpc_response('financials.read',data))
     def test_invalid_batch_leaves_no_snapshot(self):
         with self.assertRaises(ProviderError):self.sync([self.row(2024,100),self.row(2024,float('inf'))])
         self.assertIsNone(self.read()['manifest'])

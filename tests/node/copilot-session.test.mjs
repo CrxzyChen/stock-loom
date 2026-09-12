@@ -152,3 +152,13 @@ test('goal deletion uses native clear and refuses mixed changes',async()=>{
  const f=await fixture();await f.session.goal('thread-1',{clear:true});assert.deepEqual(f.calls.at(-1),{method:'thread/goal/clear',params:{threadId:'thread-1'}});
  await assert.rejects(f.session.goal('thread-1',{clear:true,status:'active'}));await assert.rejects(f.session.goal('thread-1',{clear:false}));
 });
+
+test('approval completion recovers thread ownership and retains other pending requests',async()=>{
+ const {session,rpc}=await fixture();await session.list();const events=[];session.on('notification',e=>events.push(e));
+ for(const id of [1,2])rpc.emit('request',{id,method:'mcpServer/elicitation/request',params:{threadId:'thread-1'}});
+ rpc.emit('notification',{method:'serverRequest/resolved',params:{requestId:1}});
+ assert.equal(events[0].params.threadId,'thread-1');assert.equal(events[0].params.pendingRequests,1);
+ rpc.emit('notification',{method:'serverRequest/resolved',params:{requestId:2}});assert.equal(events[1].params.pendingRequests,0);
+ rpc.emit('notification',{method:'serverRequest/resolved',params:{requestId:999}});assert.equal(events.length,2);
+ rpc.emit('request',{id:3,params:{threadId:'thread-1'}});rpc.emit('state','stopped');assert.equal(session.requests.size,0);
+});

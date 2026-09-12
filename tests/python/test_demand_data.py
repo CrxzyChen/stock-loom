@@ -40,4 +40,31 @@ class DemandTests(unittest.TestCase):
   params={'instrumentId':'000001.SZ','start':'20230101','end':'20240131'};plan=incremental.prepare(self.s,'bars.sync',params,requests('bars.sync',params));seen=[]
   payload=incremental.execute(plan,lambda t,a,p,f:seen.append(p) or [],self.token)
   self.assertTrue(all(p['start_date']=='20230101' and p['end_date']=='20231231' for p in seen));self.assertEqual(payload['daily'][0]['trade_date'],'20240126')
-if __name__=='__main__' :unittest.main()
+ def test_listing_boundaries_avoid_impossible_daily_requests(self):
+  self.s.db.execute("UPDATE instruments SET list_date='2024-03-01'")
+  self.assertEqual(self.ensure()['state'],'disabled')
+  self.assertEqual(self.s.db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0],0)
+  self.s.db.execute("UPDATE instruments SET list_date='2024-01-15'")
+  result=self.ensure();params=json.loads(self.s.db.execute('SELECT params FROM jobs WHERE id=?',(result['jobIds'][0],)).fetchone()[0])
+  self.assertEqual(params['start'],'20240115')
+ def test_new_listing_cached_range_is_considered_complete(self):
+  self.s.db.execute("UPDATE instruments SET list_date='2024-01-15'")
+  daily=[dict(ts_code='000001.SZ',trade_date='20240205',open=10,high=11,low=9,close=10,vol=1,amount=1)]
+  self.s.sync_bars({'instrumentId':'000001.SZ','start':'20240115','end':'20240205','token':self.token},lambda t,a,p,f:daily if a=='daily' else [dict(ts_code='000001.SZ',trade_date='20240205',adj_factor=1)])
+  self.assertEqual(self.ensure()['state'],'ready')
+  self.assertEqual(self.s.db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0],0)
+ def test_delisted_history_stops_at_last_eligible_session(self):
+  self.s.db.execute("UPDATE instruments SET list_status='D',list_date='1991-04-03',delist_date='2024-02-03'")
+  result=self.ensure();params=json.loads(self.s.db.execute('SELECT params FROM jobs WHERE id=?',(result['jobIds'][0],)).fetchone()[0])
+  self.assertEqual(params['end'],'20240202')
+ def test_unknown_delisting_date_does_not_assume_current_quotes(self):
+  self.s.db.execute("UPDATE instruments SET list_status='D'")
+  result=self.ensure();self.assertEqual(result['state'],'disabled');self.assertIn('退市日期',result['message'])
+  self.assertEqual(self.s.db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0],0)
+ def test_valuation_history_honors_requested_years(self):
+  params={'instrumentId':'000001.SZ','endpoint':'daily_basic','years':3,'force':False,'token':self.token}
+  result=self.s.demand_ensure(params,self.now)
+  request=json.loads(self.s.db.execute('SELECT params FROM jobs WHERE id=?',(result['jobIds'][0],)).fetchone()[0])
+  self.assertEqual(request['start'],'20210205');self.assertEqual(request['end'],'20240205')
+  self.assertEqual(self.s.demand_ensure(params,self.now)['jobIds'],result['jobIds'])
+if __name__=='__main__'  :unittest.main()

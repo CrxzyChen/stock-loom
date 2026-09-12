@@ -9,14 +9,42 @@ test('MCP reads live UI service holdings and watchlists through an authenticated
   const broker=new WorkspaceToolBroker((method,p)=>service.call(method,p)),pipe=await startToolPipe(broker);
   const transport=new StdioClientTransport({command:process.execPath,args:[path.resolve('apps/research-tools/workspace-mcp-server.mjs')],env:{...process.env,STOCK_TOOL_PIPE:pipe.endpoint,STOCK_RUN_TOKEN:broker.token,STOCK_RUN_ID:broker.runId},stderr:'pipe'});
   const client=new Client({name:'stock-fixture',version:'1.0.0'});
-  const read=async name=>{const result=await client.callTool({name,arguments:{}});assert.ok(!result.isError);return JSON.parse(result.content[0].text)};
+  const call=async(name,args={})=>{const result=await client.callTool({name,arguments:args});assert.ok(!result.isError,JSON.stringify(result));return JSON.parse(result.content[0].text)};
+  const read=name=>call(name);
   try{
     await client.connect(transport);const toolNames=new Set((await client.listTools()).tools.map(tool=>tool.name));for(const name of ['get_holdings','get_portfolio','list_watchlists'])assert.ok(toolNames.has(name),`Missing live workspace tool: ${name}`);assert.deepEqual(await read('get_holdings'),[]);
+    const datasets=await read('list_reference_datasets');assert.equal(datasets.length,15);assert.ok(datasets.some(d=>d.endpoint==='stock_company'));
+    assert.equal(await call('read_reference_data',{endpoint:'stock_company',instrumentId:'600000.SH',start:'20230101',end:'20260911',offset:0}),null);
     const params={instrumentId:'600000.SH',quantity:100,costPrice:'10.50',asOf:'2026-09-11',revision:0};
     await service.call('holdings.save',params);assert.equal((await read('get_holdings'))[0].quantity,100);
     assert.deepEqual(await read('get_portfolio'),await service.call('holdings.summary',{}));
     await service.call('holdings.save',{...params,quantity:200,revision:1});assert.equal((await read('get_holdings'))[0].quantity,200);
     const group=await service.call('watchlists.create',{name:'Fixture list'});assert.equal((await read('list_watchlists'))[0].id,group.id);
+    // Exercise the actual MCP transport and database, not a mocked write handler.
+    const member={listId:group.id,instrumentId:'600000.SH'};
+    await call('add_watchlist_member',member);await call('add_watchlist_member',member);
+    assert.equal((await service.call('watchlists.members',{listId:group.id})).length,1);
+    await call('rename_watchlist',{listId:group.id,name:'Renamed through MCP'});
+    assert.equal((await service.call('watchlists.list',{}))[0].name,'Renamed through MCP');
+    await call('remove_watchlist_member',member);
+    assert.deepEqual(await service.call('watchlists.members',{listId:group.id}),[]);
+    const updated=await call('save_holding',{...params,quantity:300,revision:2});
+    assert.equal(updated.revision,3);assert.equal((await service.call('holdings.list',{}))[0].quantity,300);
+    const conflicting=await client.callTool({name:'save_holding',arguments:{...params,quantity:400,revision:2}});
+    assert.equal(conflicting.isError,true);assert.equal((await read('get_holdings'))[0].quantity,300);
+    const {quantity,...incomplete}=params;
+    assert.equal((await client.callTool({name:'save_holding',arguments:incomplete})).isError,true);
+    await call('save_holding',{...params,quantity:0,revision:3});
+    assert.equal((await service.call('holdings.list',{}))[0].quantity,0);
+    const ledger=await call('read_position_ledger',{instrumentId:params.instrumentId});assert.equal(ledger.revision,4);
+    const trade={instrumentId:params.instrumentId,revision:4,requestId:'mcp-ledger-buy-1',event:{kind:'buy',date:params.asOf,quantity:100,price:'10',fee:'5'},supersedes:null,voided:false};
+    const bought=await call('write_position_ledger',trade);assert.equal(bought.quantity,100);
+    assert.deepEqual(await call('write_position_ledger',trade),bought);
+    assert.equal((await read('get_holdings'))[0].quantity,100);
+    const sale={...trade,revision:5,requestId:'mcp-ledger-sell-1',event:{kind:'sell',date:params.asOf,quantity:50,price:'12',fee:'5'}};
+    const sold=await call('write_position_ledger',sale);assert.equal(sold.realizedProfit,'92.50');
+    const corrected=await call('write_position_ledger',{...sale,revision:6,requestId:'mcp-ledger-correction-1',supersedes:sold.eventId,event:{...sale.event,price:'13'}});assert.equal(corrected.realizedProfit,'142.50');
+    const reread=await call('read_position_ledger',{instrumentId:params.instrumentId});assert.equal(reread.quantity,50);assert.equal(reread.events.find(r=>r.id===sold.eventId).active,false);
     const request={token:broker.token,runId:broker.runId,tool:'holdings.save',arguments:params};await assert.rejects(broker.call(request));
     broker.revoke();assert.equal((await client.callTool({name:'get_holdings',arguments:{}})).isError,true);
   }finally{await client.close();await pipe.close();await service.stop()}

@@ -64,3 +64,53 @@ test('task conversation survives repeats, edits and app restart; legacy tasks ad
  const data=JSON.parse(await fs.readFile(file,'utf8'));delete data.tasks[0].threadId;data.runs.push({taskId:id,project:'other',threadId:'wrong',status:'succeeded'});await fs.writeFile(file,JSON.stringify(data));
  const migrated=new TaskScheduler(opts);await migrated.initialize();try{assert.equal((await migrated.list()).tasks[0].threadId,'fixed-1');await migrated.runNow(id);assert.equal(creates,1)}finally{await migrated.stop()}
 });
+
+test('scheduler atomic publication retries temporary Windows locks and surfaces permanent errors',async()=>{
+ const {replaceSchedulerFile}=await import('../../apps/desktop/src/main/task-scheduler.mjs');
+ let attempts=0;await replaceSchedulerFile('pending','target',async()=>{if(++attempts<3)throw Object.assign(Error('locked'),{code:'EPERM'})});assert.equal(attempts,3);
+ let denied=0;await assert.rejects(replaceSchedulerFile('pending','target',async()=>{denied++;throw Object.assign(Error('denied'),{code:'EACCES'})}),/denied/);assert.equal(denied,5);
+ let missing=0;await assert.rejects(replaceSchedulerFile('pending','target',async()=>{missing++;throw Object.assign(Error('missing'),{code:'ENOENT'})}),/missing/);assert.equal(missing,1);
+});
+
+test('multiple approvals remain waiting until all native requests resolve',async()=>{
+ const root=await fs.mkdtemp(path.resolve('.runtime/tests/scheduler-approvals-'));
+ const s=new TaskScheduler({file:path.join(root,'scheduler.json'),project:async()=>'fixture',canRun:()=>true,run:async(t,started)=>started('thread-1')});
+ await s.initialize();try{
+  const t=await s.save(task);await s.runNow(t.id);
+  s.event({kind:'request',id:1,params:{threadId:'thread-1'}});
+  s.event({method:'serverRequest/resolved',params:{threadId:'thread-1',requestId:1,pendingRequests:1}});
+  assert.equal((await s.list()).runs[0].status,'waiting');
+  s.event({method:'serverRequest/resolved',params:{threadId:'thread-1',requestId:2,pendingRequests:0}});
+  assert.equal((await s.list()).runs[0].status,'running');
+  s.event({kind:'state',state:'stopped'});assert.equal((await s.list()).runs[0].status,'interrupted');
+ }finally{await s.stop()}
+});
+
+test('blocked manual run records the occupying conversation without starting another turn',async()=>{
+ const root=await fs.mkdtemp(path.resolve('.runtime/tests/scheduler-blocker-'));let called=false;
+ const s=new TaskScheduler({file:path.join(root,'scheduler.json'),project:async()=>'fixture',canRun:()=>false,blocker:()=>({threadId:'busy-thread',message:'Codex 正在处理另一会话'}),run:async()=>{called=true}});
+ await s.initialize();try{const t=await s.save(task),r=await s.runNow(t.id);assert.equal(r.status,'skipped');assert.equal(r.blockingThreadId,'busy-thread');assert.equal(called,false);assert.equal((await s.list()).runs[0].blockingThreadId,'busy-thread')}finally{await s.stop()}
+});
+
+import {nextTaskDue} from '../../apps/desktop/src/main/task-scheduler.mjs';
+test('next deadline covers calendar schedules, timezones and pause state',()=>{
+ const date=new Date('2026-09-12T00:00:00Z');
+ assert.equal(new Date(nextTaskDue(task,date)).toISOString(),'2026-09-14T07:30:00.000Z');
+ assert.equal(new Date(nextTaskDue({...task,frequency:'daily'},date)).toISOString(),'2026-09-12T07:30:00.000Z');
+ assert.equal(new Date(nextTaskDue({...task,frequency:'hourly'},date)).toISOString(),'2026-09-12T00:30:00.000Z');
+ assert.equal(nextTaskDue({...task,enabled:false},date),null);
+ assert.equal(new Date(nextTaskDue({...task,frequency:'daily',timezone:'America/New_York',time:'09:30'},new Date('2026-03-07T15:00:00Z'))).toISOString(),'2026-03-08T13:30:00.000Z');
+});
+test('late completion from an earlier turn cannot finish a retried scheduled run',async()=>{
+ const root=await fs.mkdtemp(path.resolve('.runtime/tests/scheduler-turn-'));let starts=0;
+ const s=new TaskScheduler({file:path.join(root,'tasks.json'),project:async()=>'fixture',canRun:()=>true,run:async(t,started)=>{starts++;await started(t.threadId??'same-thread')}});
+ await s.initialize();try{
+  const t=await s.save(task);await s.runNow(t.id);
+  s.event({method:'turn/started',params:{threadId:'same-thread',turn:{id:'first'}}});
+  s.event({method:'turn/completed',params:{threadId:'same-thread',turn:{id:'first',status:'failed',error:{message:'private detail'}}}});
+  let r=(await s.list()).runs[0];assert.equal(r.status,'failed');assert.match(r.message,/执行失败/);assert.ok(!r.message.includes('private detail'));
+  await s.runNow(t.id);s.event({method:'turn/started',params:{threadId:'same-thread',turn:{id:'second'}}});await s.chain;
+  s.event({method:'turn/completed',params:{threadId:'same-thread',turn:{id:'first',status:'completed'}}});assert.equal((await s.list()).runs[0].status,'running');
+  s.event({method:'turn/completed',params:{threadId:'same-thread',turn:{id:'second',status:'completed'}}});assert.equal((await s.list()).runs[0].status,'succeeded');assert.equal(starts,2);
+ }finally{await s.stop()}
+});

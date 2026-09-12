@@ -165,6 +165,8 @@ class BundleReadTests(unittest.TestCase):
         try:
             # This copied synthetic archive must actually have the legacy SQL
             # shape; changing only user_version would create an invalid fixture.
+            for table in ('ledger_events','ledger_accounts','ledger_requests','ledger_opening_sources'):
+                connection.execute('DROP TABLE '+table)
             connection.execute('DROP TABLE holdings')
             connection.execute('DROP TABLE job_events')
             connection.execute('DROP TABLE job_attempts')
@@ -186,7 +188,7 @@ class BundleReadTests(unittest.TestCase):
         result=self.store.restore_backup({'archive':str(archive)})
         restored=Store(self.store.root.parent/result['directory'])
         try:
-            self.assertEqual(restored.overview()['schemaVersion'],8)
+            self.assertEqual(restored.overview()['schemaVersion'],9)
             self.assertEqual(restored.read_bars({'snapshotId':self.id,'adjustment':'forward','offset':0}),self.page('forward'))
             self.assertTrue(any(p.name.startswith('pre-schema-6-') for p in (restored.root/'backups').iterdir()))
         finally:restored.close()

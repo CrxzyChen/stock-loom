@@ -19,7 +19,7 @@ def response_metadata(method, result, *, research_context=None):
         date(value.get('date'))
         for item in value.get('items',[]):source('snapshot',item.get('snapshotId'))
     if isinstance(result,dict):
-        if method in ('bars.read','bars.sync','financials.sync','breadth.read','sectors.read','sectors.summary','sector.history'):snapshot(result)
+        if method in ('reference.read','reference.sync','bars.read','bars.sync','financials.sync','breadth.read','sectors.read','sectors.summary','sector.history'):snapshot(result)
         elif method=='financials.read' and result.get('manifest'):snapshot(result['manifest'])
         elif method in ('screen.run','screen.page','screen.latest'):
             date(result.get('date'));source('screen',result.get('resultId'))

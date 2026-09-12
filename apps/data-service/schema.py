@@ -1,3 +1,3 @@
-"""Version 8 adds manual holdings; versions 5 through 7 migrate on restore."""
-SCHEMA_VERSION = 8
-RESTORABLE_SCHEMAS = (5, 6, 7, 8)
+"""Version 9 adds the manual position ledger and auditable balance adjustments."""
+SCHEMA_VERSION = 9
+RESTORABLE_SCHEMAS = (5, 6, 7, 8, 9)

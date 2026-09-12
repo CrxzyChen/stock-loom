@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {announcementUrl} from '../../apps/desktop/src/main/announcement-url.mjs';
+test('announcement links only open supported disclosure hosts with web protocols',()=>{assert.match(announcementUrl('https://static.cninfo.com.cn/finalpage/a.pdf'),/^https:/);for(const url of ['file:///C:/x','javascript:alert(1)','https://cninfo.com.cn.evil.test/x','https://user@cninfo.com.cn/x','http://127.0.0.1/x','https://cninfo.com.cn:8443/x'])assert.throws(()=>announcementUrl(url))});

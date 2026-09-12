@@ -117,7 +117,7 @@ class Financials:
         else:record=self.db.execute('SELECT id,manifest FROM snapshots WHERE dataset=? ORDER BY rowid DESC LIMIT 1',(dataset,)).fetchone()
         if not record:return {'manifest':None,'items':[]}
         manifest,rows=self.checked_financial_rows(record,params['endpoint'])
-        if params['endpoint']=='daily_basic':return {'manifest':manifest,'items':sorted(rows,key=lambda r:r['trade_date'],reverse=True)[:500]}
+        if params['endpoint']=='daily_basic':return {'manifest':manifest,'items':sorted(rows,key=lambda r:r['trade_date'],reverse=True)}
         # Never silently choose one of conflicting revisions. Keep each source fact visible.
         by_period={}
         for row in rows:by_period.setdefault((row['end_date'],row['comp_type']),[]).append(row)

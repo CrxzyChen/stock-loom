@@ -44,6 +44,7 @@ for(const [name,s] of Object.entries(defs)){
   ts+='}\n';py+='\n';
 }
 const json=JSON.stringify(defs);
+ts+=`export const PROVIDER_ENDPOINTS = ${JSON.stringify(defs.ProviderEndpoint.enum)} as const;\n`;
 const runtime=`// Generated from schema.json.\nimport {matchesSchema} from './validate.mjs';\nconst definitions=${json};\nexport const matchesContract=(name,value)=>Object.hasOwn(definitions,name)&&matchesSchema(definitions[name],value,definitions);\nconst responses=${JSON.stringify(responses)};\nexport const matchesRpcResponse=(method,value)=>!Object.hasOwn(responses,method)||matchesContract(responses[method],value);\n`;
 py+=`import json as _json\nfrom contract_validation import matches_schema as _matches_schema\n_DEFINITIONS = _json.loads(${JSON.stringify(json)})\ndef matches_contract(name, value):\n    return name in _DEFINITIONS and _matches_schema(_DEFINITIONS[name],value,_DEFINITIONS)\n`;
 py+=`_RESPONSES = _json.loads(${JSON.stringify(JSON.stringify(responses))})\ndef matches_rpc_response(method,value):\n    return method not in _RESPONSES or matches_contract(_RESPONSES[method],value)\n`;

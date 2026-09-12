@@ -2,9 +2,11 @@
 import {ref,watch,nextTick} from 'vue';
 import {buttonIcons} from './button-icons';
 const categories=[{id:'connection',name:'模型与连接',icon:'message'},{id:'tools',name:'工具与 MCP',icon:'settings'},{id:'security',name:'权限与沙箱',icon:'check'},{id:'data',name:'行情数据',icon:'chart'},{id:'appearance',name:'外观与窗口',icon:'panel'},{id:'storage',name:'存储与备份',icon:'folder'},{id:'system',name:'服务与更新',icon:'refresh'}];
+const props=withDefaults(defineProps<{revealSystem?:number}>(),{revealSystem:0});
 const selected=ref('connection');
 try{const saved=localStorage.getItem('stock.settings-category');if(categories.some(c=>c.id===saved))selected.value=saved!}catch{}
 const visited=ref(new Set([selected.value]));
+watch(()=>props.revealSystem,value=>{if(value){selected.value='system';visited.value.add('system')}},{immediate:true});
 watch(selected,value=>{visited.value.add(value);try{localStorage.setItem('stock.settings-category',value)}catch{}});
 async function navigate(event:KeyboardEvent,index:number){let target=index;if(event.key==='ArrowDown')target=(index+1)%categories.length;else if(event.key==='ArrowUp')target=(index+categories.length-1)%categories.length;else if(event.key==='Home')target=0;else if(event.key==='End')target=categories.length-1;else return;event.preventDefault();selected.value=categories[target].id;await nextTick();document.getElementById('settings-category-'+selected.value)?.focus()}
 </script>
