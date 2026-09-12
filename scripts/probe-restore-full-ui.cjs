@@ -1,0 +1,43 @@
+// Synthetic disk-full injection; real Main/Preload/Renderer and Python restore.
+const {app,dialog}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const directory=path.resolve(process.argv[2]||'');
+if(!directory.startsWith(path.resolve('.runtime/tests')+path.sep)||!path.basename(directory).startsWith('market-ui-'))throw Error('Isolated fixture required');
+app.setPath('userData',directory);app.disableHardwareAcceleration();
+const main=path.resolve('apps/data-service/main.py'),wrapper=path.join(directory,'restore-full.py');
+const enabled=path.join(directory,'inject-full.json'),backupRecord=path.join(directory,'backup.json');
+fs.writeFileSync(enabled,'true');
+fs.writeFileSync(wrapper,`import pathlib,sys,runpy,json,errno\nsys.path.insert(0,${JSON.stringify(path.dirname(main))})\nfrom main import Store\nroot=pathlib.Path(${JSON.stringify(directory)})\nrecord=root/'backup.json'\nif not record.exists():\n store=Store(root/'profiles/default')\n try: record.write_text(json.dumps(store.create_backup({})))\n finally: store.close()\noriginal=pathlib.Path.open\ndef checked(file,mode='r',*args,**kwargs):\n if mode=='xb' and file.is_relative_to(root/'profiles') and file.relative_to(root/'profiles').parts[0].startswith('restored-') and json.loads((root/'inject-full.json').read_text()):\n  raise OSError(errno.ENOSPC,'SYNTHETIC_PRIVATE_PATH')\n return original(file,mode,*args,**kwargs)\npathlib.Path.open=checked\nrunpy.run_path(${JSON.stringify(main)},run_name='__main__')\n`);
+const cp=require('node:child_process'),spawn=cp.spawn;
+cp.spawn=function(command,args,options){return spawn.call(this,command,args?.[0]===main?[wrapper,...args.slice(1)]:args,options)};
+dialog.showOpenDialog=async()=>({canceled:false,filePaths:[JSON.parse(fs.readFileSync(backupRecord)).path]});
+let started=false;const record={synthetic:true,passed:false,dialogSelectionStubbed:true};
+const timer=setTimeout(()=>finish('timeout'),30000);
+function finish(error){clearTimeout(timer);if(error)record.error=error;else record.passed=true;fs.writeFileSync(path.join(directory,'result.json'),JSON.stringify(record,null,2));app.quit()}
+app.on('browser-window-created',(_event,win)=>{if(started)return;started=true;
+ win.webContents.once('did-finish-load',()=>void(async()=>{
+  const js=s=>win.webContents.executeJavaScript(s);
+  const wait=s=>js(`new Promise((resolve,reject)=>{let n=0;const t=setInterval(()=>{if(${s}){clearInterval(t);resolve()}else if(++n>150){clearInterval(t);reject(Error('UI wait timeout'))}},50)})`);
+  await wait(`document.querySelector('.connection.ready')`);
+  const snapshot=(await js(`window.stock.barVersions('000001.SZ')`))[0].snapshotId;
+  const before=await js(`window.stock.readBars(${JSON.stringify(snapshot)},'forward',0)`);
+  await js(`window.restoreEvents=[];window.stock.onServiceStatus(s=>window.restoreEvents.push(s));document.querySelectorAll('nav button')[5].click()`);
+  const button=`Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='从备份恢复…')`;
+  await wait(button);await js(`${button}.click()`);
+  await wait(`document.querySelector('.banner.error')?.textContent.includes('STORAGE_FULL')`);
+  await wait(`!document.querySelector('.page-content').inert&&!${button}.disabled`);
+  await new Promise(r=>setTimeout(r,250));
+  const error=await js(`document.querySelector('.banner.error')?.textContent`);
+  assert.ok(error.startsWith('STORAGE_FULL: 恢复目标磁盘空间不足'));assert.ok(!error.includes('SYNTHETIC_PRIVATE_PATH'));
+  assert.deepEqual(await js(`window.stock.readBars(${JSON.stringify(snapshot)},'forward',0)`),before);
+  record.errorSurvivesRefresh=true;record.originalReadable=true;record.error=undefined;
+  fs.writeFileSync(path.join(directory,'restore-full.png'),(await win.webContents.capturePage()).toPNG());
+  fs.writeFileSync(enabled,'false');await js(`${button}.click()`);
+  await wait(`document.body.innerText.includes('已切换到恢复的资料，原资料仍保留')`);
+  await wait(`!document.querySelector('.page-content').inert&&!${button}.disabled`);
+  assert.deepEqual(await js(`window.stock.readBars(${JSON.stringify(snapshot)},'forward',0)`),before);
+  const events=await js('window.restoreEvents');assert.ok(events.some(s=>s.maintenance===true));assert.equal(events.at(-1).maintenance,false);
+  record.retrySucceeded=true;record.restoredBarsEqual=true;record.maintenanceReleased=true;
+  finish();
+ })().catch(e=>finish(String(e.stack||e))));
+});
+require(path.resolve('dist/main/main.cjs'));

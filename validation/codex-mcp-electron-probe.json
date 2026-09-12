@@ -1,0 +1,390 @@
+{
+  "version": "0.154.0",
+  "binarySha256": "be96b992178b1e467c225800da0d65f2c86d5eba1ef0b14632f65db381cbdfde",
+  "disabledFeatures": [
+    "shell_tool",
+    "unified_exec",
+    "apps",
+    "plugins",
+    "hooks",
+    "multi_agent",
+    "browser_use",
+    "browser_use_external",
+    "computer_use",
+    "image_generation",
+    "code_mode_host",
+    "skill_search",
+    "skill_mcp_dependency_install",
+    "view_image",
+    "goals"
+  ],
+  "realModelCalled": false,
+  "writeTest": true,
+  "mcpTest": true,
+  "sdkCompleted": true,
+  "mcpTools": [
+    "search_instruments",
+    "get_daily_bars",
+    "get_financials",
+    "compute_indicators",
+    "screen_stocks",
+    "create_chart",
+    "save_report"
+  ],
+  "toolAudit": [
+    {
+      "tool": "compute_indicators",
+      "at": 1789139559270,
+      "state": "completed"
+    }
+  ],
+  "attempts": [
+    "workspace-update",
+    "outside-update",
+    "workspace-create"
+  ],
+  "sentinelUnchanged": true,
+  "captured": [
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "list_mcp_resources"
+        },
+        {
+          "type": "function",
+          "name": "list_mcp_resource_templates"
+        },
+        {
+          "type": "function",
+          "name": "read_mcp_resource"
+        },
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        },
+        {
+          "type": "tool_search",
+          "name": null
+        }
+      ],
+      "toolOutputs": []
+    },
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "list_mcp_resources"
+        },
+        {
+          "type": "function",
+          "name": "list_mcp_resource_templates"
+        },
+        {
+          "type": "function",
+          "name": "read_mcp_resource"
+        },
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        },
+        {
+          "type": "tool_search",
+          "name": null
+        }
+      ],
+      "toolOutputs": [
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        }
+      ]
+    },
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "list_mcp_resources"
+        },
+        {
+          "type": "function",
+          "name": "list_mcp_resource_templates"
+        },
+        {
+          "type": "function",
+          "name": "read_mcp_resource"
+        },
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        },
+        {
+          "type": "tool_search",
+          "name": null
+        }
+      ],
+      "toolOutputs": [
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        }
+      ]
+    },
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "list_mcp_resources"
+        },
+        {
+          "type": "function",
+          "name": "list_mcp_resource_templates"
+        },
+        {
+          "type": "function",
+          "name": "read_mcp_resource"
+        },
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        },
+        {
+          "type": "tool_search",
+          "name": null
+        }
+      ],
+      "toolOutputs": [
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        }
+      ],
+      "loadedTools": [],
+      "searchParameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "Maximum number of tools to return. Defaults to 8."
+          },
+          "query": {
+            "type": "string",
+            "description": "Search query for deferred tools."
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "list_mcp_resources"
+        },
+        {
+          "type": "function",
+          "name": "list_mcp_resource_templates"
+        },
+        {
+          "type": "function",
+          "name": "read_mcp_resource"
+        },
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        },
+        {
+          "type": "tool_search",
+          "name": null
+        }
+      ],
+      "toolOutputs": [
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        }
+      ],
+      "loadedTools": [
+        {
+          "type": "namespace",
+          "name": "mcp__stock",
+          "tools": [
+            "compute_indicators",
+            "search_instruments",
+            "get_daily_bars",
+            "get_financials",
+            "create_chart",
+            "screen_stocks",
+            "save_report"
+          ]
+        }
+      ],
+      "searchParameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "Maximum number of tools to return. Defaults to 8."
+          },
+          "query": {
+            "type": "string",
+            "description": "Search query for deferred tools."
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "list_mcp_resources"
+        },
+        {
+          "type": "function",
+          "name": "list_mcp_resource_templates"
+        },
+        {
+          "type": "function",
+          "name": "read_mcp_resource"
+        },
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        },
+        {
+          "type": "tool_search",
+          "name": null
+        }
+      ],
+      "toolOutputs": [
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": false,
+          "sandboxFailure": false,
+          "length": 31
+        }
+      ],
+      "loadedTools": [
+        {
+          "type": "namespace",
+          "name": "mcp__stock",
+          "tools": [
+            "compute_indicators",
+            "search_instruments",
+            "get_daily_bars",
+            "get_financials",
+            "create_chart",
+            "screen_stocks",
+            "save_report"
+          ]
+        }
+      ],
+      "searchParameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "Maximum number of tools to return. Defaults to 8."
+          },
+          "query": {
+            "type": "string",
+            "description": "Search query for deferred tools."
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "bridgeSha256": "d0cddd579816e819ea507ebf63776b63d60f926563109d610b5bc4e04409b084",
+  "commandSha256": "e048632e03fabc96de5e10afbebc0aa31f4e1674155ea3d270597fe7523f9d80",
+  "electronBridge": true
+}

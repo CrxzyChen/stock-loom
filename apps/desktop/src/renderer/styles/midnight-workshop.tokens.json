@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": 1,
+  "id": "midnight-workshop",
+  "name": "Midnight Workshop",
+  "scope": "application-ui",
+  "colors": {
+    "canvas": "#090B10",
+    "surface": "#0D1118",
+    "surfaceRaised": "#111721",
+    "surfaceOverlay": "#151C27",
+    "line": "rgba(255, 255, 255, 0.075)",
+    "lineStrong": "rgba(255, 255, 255, 0.13)",
+    "text": "#C9D1D9",
+    "textMuted": "#728091",
+    "textFaint": "#465361",
+    "accent": "#49CDDD",
+    "accentSoft": "rgba(73, 205, 221, 0.10)",
+    "success": "#64D98B",
+    "warning": "#E7B85D",
+    "danger": "#F0737E"
+  },
+  "typography": {
+    "uiFamily": "Inter, Segoe UI, system-ui, sans-serif",
+    "monoFamily": "JetBrains Mono, Cascadia Code, ui-monospace, Consolas, monospace",
+    "compact": {
+      "metadataPx": 10,
+      "chromePx": 11,
+      "controlPx": 12,
+      "bodyPx": 13,
+      "controlHeightPx": 30
+    },
+    "standard": {
+      "metadataPx": 12,
+      "chromePx": 13,
+      "controlPx": 13,
+      "bodyPx": 14,
+      "controlHeightPx": 36
+    }
+  },
+  "spacingPx": [2, 4, 6, 8, 12, 16, 24, 32],
+  "geometry": {
+    "borderPx": 1,
+    "controlRadiusPx": 5,
+    "panelRadiusPx": 6,
+    "dialogRadiusPx": 10,
+    "compactTargetMinPx": 28,
+    "standardTargetMinPx": 32,
+    "splitterVisualPx": 1,
+    "splitterHitPx": 8,
+    "desktopTitlebarPx": 38
+  },
+  "motion": {
+    "feedbackMs": 100,
+    "panelMs": 150,
+    "easing": "cubic-bezier(0.2, 0, 0, 1)",
+    "directManipulationEasing": "none"
+  },
+  "policy": {
+    "accentIsStateNotDecoration": true,
+    "noNativeLightControls": true,
+    "oneIconFamily": true,
+    "colorAloneDoesNotEncodeState": true,
+    "gameContentExcludedByDefault": true
+  }
+}

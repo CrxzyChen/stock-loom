@@ -1,0 +1,20 @@
+const {app}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const root=fs.mkdtempSync(path.resolve('.runtime/tests/market-ui-window-'));
+app.setPath('userData',root);app.disableHardwareAcceleration();let started=false;
+const record={passed:false,directory:root};const timer=setTimeout(()=>app.exit(1),30000);
+app.on('browser-window-created',(_,win)=>{if(started)return;started=true;win.webContents.once('did-finish-load',()=>void(async()=>{
+ const js=s=>win.webContents.executeJavaScript(s);
+ const wait=async condition=>{for(let i=0;i<100;i++){if(await condition())return;await new Promise(r=>setTimeout(r,30))}throw Error('Window condition timeout')};
+ await wait(()=>js(`Boolean(document.querySelector('.window-controls'))`));
+ assert.equal(await js(`getComputedStyle(document.querySelector('.appbar')).getPropertyValue('-webkit-app-region')`),'drag');
+ await js(`document.querySelector('[aria-label="最大化"]').click()`);await wait(()=>win.isMaximized());await wait(()=>js(`Boolean(document.querySelector('[aria-label="还原窗口"]'))`));record.maximize=true;
+ await js(`document.querySelector('[aria-label="还原窗口"]').click()`);await wait(()=>!win.isMaximized());record.restore=true;
+ await js(`document.querySelector('[aria-label="最小化"]').click()`);await wait(()=>win.isMinimized());record.minimize=true;win.restore();
+ win.setContentSize(1280,800);await new Promise(r=>setTimeout(r,150));fs.writeFileSync(path.join(root,'window-1280.png'),(await win.webContents.capturePage()).toPNG());
+ win.setContentSize(1024,768);win.webContents.setZoomFactor(1.5);await new Promise(r=>setTimeout(r,150));
+ const fit=await js(`(()=>{const r=document.querySelector('.window-controls').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.height>=28})()`);assert.equal(fit,true);
+ await js(`document.querySelector('[aria-label="关闭窗口"]').focus()`);fs.writeFileSync(path.join(root,'window-150.png'),(await win.webContents.capturePage()).toPNG());record.zoomAndFocus=true;
+ let close=false;win.on('close',event=>{event.preventDefault();close=true});await js(`document.querySelector('[aria-label="关闭窗口"]').click()`);await wait(()=>close);record.closeRequested=true;
+ record.passed=true;fs.writeFileSync('validation/window-controls.json',JSON.stringify(record,null,2));clearTimeout(timer);app.exit(0);
+ })().catch(error=>{record.error=String(error.stack);fs.writeFileSync('validation/window-controls.json',JSON.stringify(record,null,2));app.exit(1)}));});
+require(path.resolve('dist/main/main.cjs'));

@@ -1,0 +1,21 @@
+<script setup lang="ts">
+import UiButton from './UiButton.vue';
+import {onBeforeUnmount,onMounted,ref,watch} from 'vue';
+import type {Watchlist,ScreenPoolPlan,ScreenBatch} from '../../../../packages/contracts/desktop';
+const props=defineProps<{groups:Watchlist[];date:string}>();
+const scope=ref<'all'|'watchlist'>('watchlist'),group=ref(''),lookback=ref(60),plan=ref<ScreenPoolPlan|null>(null),busy=ref(false),error=ref('');
+const batch=ref<ScreenBatch|null>(null),acting=ref(false);let closed=false,timer:ReturnType<typeof setTimeout>|undefined;
+const desktop=Boolean(window.stock);let generation=0;
+async function poll(){if(!window.stock||closed)return;try{const result=await window.stock.screenBatchStatus();if(!closed)batch.value=result}catch{}finally{if(!closed)timer=setTimeout(poll,1500)}}
+async function execute(planId?:string){if(!window.stock||acting.value)return;acting.value=true;error.value='';try{const result=planId?await window.stock.startScreenBatch(planId):await window.stock.pauseScreenBatch();if(!closed)batch.value=result}catch(e){if(!closed)error.value=e instanceof Error?e.message:String(e)}finally{if(!closed)acting.value=false}}
+onMounted(poll);
+watch(()=>[scope.value,group.value,lookback.value,props.date],()=>{generation++;plan.value=null;error.value='';busy.value=false});
+onBeforeUnmount(()=>{generation++;closed=true;clearTimeout(timer)});
+async function preview(){
+  if(!window.stock||busy.value)return;const id=++generation;busy.value=true;error.value='';plan.value=null;
+  try{const next=await window.stock.prepareScreenPool({scope:scope.value,listId:scope.value==='all'?null:group.value,date:props.date.replaceAll('-',''),lookback:lookback.value});if(id===generation)plan.value=next}
+  catch(e){if(id===generation)error.value=e instanceof Error?e.message:String(e)}finally{if(id===generation)busy.value=false}
+}
+</script>
+<template><section class="preparation"><h2>准备筛选数据</h2><p>使用上方交易日，按股票池核对同步范围。此步骤只生成范围预览，不请求行情接口。</p><div class="controls"><label>股票池 <select v-model="scope"><option value="watchlist">自选分组</option><option value="all">全市场当前上市股票</option></select></label><label v-if="scope==='watchlist'">分组 <select v-model="group"><option value="">选择分组</option><option v-for="item in groups" :key="item.id" :value="item.id">{{item.name}}</option></select></label><label>日线回看 <select v-model.number="lookback"><option :value="1">当日</option><option :value="20">20 个交易日</option><option :value="60">60 个交易日</option></select></label><UiButton icon="refresh" :disabled="!desktop||busy||(scope==='watchlist'&&!group)" @click="preview">{{busy?'核对范围…':'预览同步范围'}}</UiButton></div><p v-if="error" class="banner error" role="alert">{{error}}</p><div v-if="plan" role="status"><p>{{plan.stocks}} 只股票 · 日线 {{plan.start}}–{{plan.date}} · 估值 {{plan.date}}</p><p>预计 {{plan.tasks}} 项任务、最多 {{plan.maxProviderRequests}} 次接口请求（含每任务最多 3 次尝试，不含手动重试）。额度与限流取决于账号权限。</p><p>示例：{{plan.examples.map(x=>x.name+' '+x.id).join('、')}}</p><p v-if="plan.bseCalendarProxy">北交所股票使用沪深一致的交易日历作为参考。</p><p>回看日历不保证每只股票都有完整日线；停牌或新上市可能导致均线数据不足。</p><UiButton icon="refresh" :disabled="acting||batch?.state==='running'" @click="execute(plan.planId)">开始同步（最多 {{plan.maxProviderRequests}} 次接口请求）</UiButton></div><div v-if="batch" class="batch-status"><h3>最近批次 · {{batch.state==='running'?'执行中':batch.state==='completed'?'任务已完成':'已暂停'}}</h3><p>{{batch.stocks}} 只股票 · {{batch.start}}–{{batch.date}} · 已完成 {{batch.completedTasks}} / {{batch.totalTasks}} 项任务</p><progress :value="batch.completedTasks" :max="batch.totalTasks" aria-label="股票池准备进度"/><p v-if="batch.error">{{batch.error}}</p><p>切换页面仍继续执行。暂停会取消当前未完成任务；已发送请求可能消耗额度。重启后需手动继续，重试可能再次使用额度。</p><UiButton icon="stop" v-if="batch.state==='running'" :disabled="acting" @click="execute()">暂停批次</UiButton><UiButton icon="play" v-if="batch.state==='paused'" :disabled="acting" @click="execute(batch.planId)">继续未完成任务（可能产生接口请求）</UiButton><p v-if="batch.state==='completed'">数据任务已完成，请重新运行筛选并检查当日覆盖与均线可用性。</p></div></section></template>
+<style scoped>.preparation{border-top:1px solid var(--line);padding:20px 24px}.preparation p{font-size:0.923077rem;color:var(--muted);margin-top:10px}.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:14px}.controls label{font-size:0.923077rem}.controls select{max-width:260px}</style>

@@ -1,0 +1,10 @@
+import fs from 'node:fs';import path from 'node:path';import {randomUUID,createHash} from 'node:crypto';import assert from 'node:assert/strict';
+const build=JSON.parse(fs.readFileSync('validation/windows-build-latest.json','utf8'));
+const bytes=fs.readFileSync(build.path);assert.equal(bytes.length,build.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),build.sha256);
+const directory=path.resolve('release/acceptance-kits',randomUUID());fs.mkdirSync(directory,{recursive:true});
+const file=path.basename(build.path);fs.writeFileSync(path.join(directory,file),bytes);
+const candidate={createdAt:new Date().toISOString(),file,bytes:build.bytes,sha256:build.sha256,signatureStatus:build.signatureStatus,serviceSha256:build.serviceSha256,releaseStatus:build.releaseStatus};
+fs.writeFileSync(path.join(directory,'candidate.json'),JSON.stringify(candidate,null,2));
+fs.copyFileSync('scripts/Inspect-Candidate.ps1',path.join(directory,'Inspect-Candidate.ps1'));
+fs.copyFileSync('docs/clean-windows-acceptance.md',path.join(directory,'README.md'));
+fs.writeFileSync('validation/acceptance-kit-latest.json',JSON.stringify({directory,...candidate},null,2));console.log(directory);

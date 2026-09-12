@@ -1,0 +1,467 @@
+{
+  "scope": "Python Store.dispatch RPC only; does not include Electron IPC or Agent tools",
+  "methods": 92,
+  "bothMapped": 92,
+  "rows": [
+    {
+      "method": "autosync.configure",
+      "request": "EnabledPolicy",
+      "response": "EnabledPolicy"
+    },
+    {
+      "method": "autosync.dispatch",
+      "request": "TokenRequest",
+      "response": "AutoSyncDispatch"
+    },
+    {
+      "method": "autosync.plan",
+      "request": "NoParams",
+      "response": "AutoSyncPlan"
+    },
+    {
+      "method": "autosync.policy",
+      "request": "NoParams",
+      "response": "EnabledPolicy"
+    },
+    {
+      "method": "backup.create",
+      "request": "NoParams",
+      "response": "BackupResult"
+    },
+    {
+      "method": "backup.restore",
+      "request": "RestoreRequest",
+      "response": "RestoreResult"
+    },
+    {
+      "method": "bars.read",
+      "request": "BarReadRequest",
+      "response": "BarPage"
+    },
+    {
+      "method": "bars.sync",
+      "request": "BarSyncRequest",
+      "response": "BarSyncResult"
+    },
+    {
+      "method": "bars.versions",
+      "request": "BarVersionsRequest",
+      "response": "BarVersionList"
+    },
+    {
+      "method": "breadth.ensure",
+      "request": "MarketEnsureRequest",
+      "response": "DemandState"
+    },
+    {
+      "method": "breadth.read",
+      "request": "NoParams",
+      "response": "BreadthReadResult"
+    },
+    {
+      "method": "calendar.status",
+      "request": "CalendarStatusRequest",
+      "response": "CalendarStatus"
+    },
+    {
+      "method": "calendar.sync",
+      "request": "CalendarSyncRequest",
+      "response": "CalendarSyncResult"
+    },
+    {
+      "method": "catalog.sync",
+      "request": "CatalogSyncRequest",
+      "response": "CatalogSyncResult"
+    },
+    {
+      "method": "demand.configure",
+      "request": "DemandPolicy",
+      "response": "DemandPolicy"
+    },
+    {
+      "method": "demand.ensure",
+      "request": "DemandEnsureRequest",
+      "response": "DemandState"
+    },
+    {
+      "method": "demand.maintain",
+      "request": "TokenRequest",
+      "response": "DemandState"
+    },
+    {
+      "method": "demand.policy",
+      "request": "NoParams",
+      "response": "DemandPolicy"
+    },
+    {
+      "method": "financials.read",
+      "request": "FinancialReadRequest",
+      "response": "FinancialData"
+    },
+    {
+      "method": "financials.snapshots",
+      "request": "FinancialVersionsRequest",
+      "response": "FinancialVersionList"
+    },
+    {
+      "method": "financials.sync",
+      "request": "FinancialSyncRequest",
+      "response": "FinancialSyncResult"
+    },
+    {
+      "method": "health",
+      "request": "NoParams",
+      "response": "ServiceHealth"
+    },
+    {
+      "method": "holdings.list",
+      "request": "NoParams",
+      "response": "HoldingList"
+    },
+    {
+      "method": "holdings.save",
+      "request": "HoldingSaveRequest",
+      "response": "Holding"
+    },
+    {
+      "method": "holdings.summary",
+      "request": "NoParams",
+      "response": "HoldingsSummary"
+    },
+    {
+      "method": "index.read",
+      "request": "IndexReadRequest",
+      "response": "OptionalIndexSnapshot"
+    },
+    {
+      "method": "index.sync",
+      "request": "IndexSyncRequest",
+      "response": "IndexSnapshot"
+    },
+    {
+      "method": "instruments.search",
+      "request": "InstrumentSearchRequest",
+      "response": "InstrumentPage"
+    },
+    {
+      "method": "jobs.cancel",
+      "request": "JobKey",
+      "response": "Job"
+    },
+    {
+      "method": "jobs.cancelAll",
+      "request": "NoParams",
+      "response": "CancelAllResult"
+    },
+    {
+      "method": "jobs.enqueue",
+      "request": "JobEnqueueRequest",
+      "response": "Job"
+    },
+    {
+      "method": "jobs.events",
+      "request": "JobEventRequest",
+      "response": "JobEventPage"
+    },
+    {
+      "method": "jobs.get",
+      "request": "JobKey",
+      "response": "Job"
+    },
+    {
+      "method": "jobs.list",
+      "request": "NoParams",
+      "response": "JobList"
+    },
+    {
+      "method": "jobs.retry",
+      "request": "JobRetryRequest",
+      "response": "Job"
+    },
+    {
+      "method": "market.read",
+      "request": "MarketReadRequest",
+      "response": "OptionalMarketSnapshot"
+    },
+    {
+      "method": "market.sync",
+      "request": "MarketSyncRequest",
+      "response": "MarketSnapshot"
+    },
+    {
+      "method": "overview",
+      "request": "NoParams",
+      "response": "Overview"
+    },
+    {
+      "method": "profile.validate",
+      "request": "NoParams",
+      "response": "ProfileValidation"
+    },
+    {
+      "method": "provider.diagnose",
+      "request": "DiagnosticRequest",
+      "response": "Diagnostic"
+    },
+    {
+      "method": "quotes.latest",
+      "request": "LatestQuoteRequest",
+      "response": "LatestQuoteList"
+    },
+    {
+      "method": "recap.configure",
+      "request": "EnabledPolicy",
+      "response": "EnabledPolicy"
+    },
+    {
+      "method": "recap.generate",
+      "request": "NoParams",
+      "response": "RecapResult"
+    },
+    {
+      "method": "recap.latest",
+      "request": "NoParams",
+      "response": "LatestRecap"
+    },
+    {
+      "method": "recap.modelAttempt",
+      "request": "NoParams",
+      "response": "ModelRecapAttempt"
+    },
+    {
+      "method": "recap.modelConfigure",
+      "request": "ModelRecapPolicy",
+      "response": "ModelRecapPolicy"
+    },
+    {
+      "method": "recap.modelContext",
+      "request": "ModelContextRequest",
+      "response": "ModelRecapContext"
+    },
+    {
+      "method": "recap.modelLatest",
+      "request": "NoParams",
+      "response": "LatestModelRecap"
+    },
+    {
+      "method": "recap.modelPolicy",
+      "request": "NoParams",
+      "response": "ModelRecapPolicy"
+    },
+    {
+      "method": "recap.modelPrepare",
+      "request": "NoParams",
+      "response": "ModelRecapContext"
+    },
+    {
+      "method": "recap.modelPublish",
+      "request": "ModelPublishRequest",
+      "response": "ModelPublishedRecap"
+    },
+    {
+      "method": "recap.modelReserve",
+      "request": "ModelReserveRequest",
+      "response": "ModelReserveResult"
+    },
+    {
+      "method": "recap.modelSettle",
+      "request": "ModelSettleRequest",
+      "response": "ModelReservation"
+    },
+    {
+      "method": "recap.modelUsage",
+      "request": "NoParams",
+      "response": "ModelRecapUsage"
+    },
+    {
+      "method": "recap.policy",
+      "request": "NoParams",
+      "response": "EnabledPolicy"
+    },
+    {
+      "method": "research.chart",
+      "request": "ResearchChartRequest",
+      "response": "ResearchChart"
+    },
+    {
+      "method": "research.context",
+      "request": "ResearchRunRequest",
+      "response": "ResearchContext"
+    },
+    {
+      "method": "research.draft.read",
+      "request": "ResearchRunRequest",
+      "response": "ResearchDraft"
+    },
+    {
+      "method": "research.draft.save",
+      "request": "ResearchDraftRequest",
+      "response": "ResearchDraftSaved"
+    },
+    {
+      "method": "research.event",
+      "request": "ResearchEventRequest",
+      "response": "ResearchRecorded"
+    },
+    {
+      "method": "research.events",
+      "request": "ResearchEventsRequest",
+      "response": "ResearchEvents"
+    },
+    {
+      "method": "research.export",
+      "request": "ResearchRunRequest",
+      "response": "ResearchExport"
+    },
+    {
+      "method": "research.list",
+      "request": "ResearchListRequest",
+      "response": "ResearchList"
+    },
+    {
+      "method": "research.prepare",
+      "request": "ResearchPrepareRequest",
+      "response": "ResearchContext"
+    },
+    {
+      "method": "research.report",
+      "request": "ResearchRunRequest",
+      "response": "ResearchReport"
+    },
+    {
+      "method": "research.save",
+      "request": "ResearchSaveRequest",
+      "response": "ResearchReport"
+    },
+    {
+      "method": "research.start",
+      "request": "ResearchRunRequest",
+      "response": "ResearchStart"
+    },
+    {
+      "method": "research.stop",
+      "request": "ResearchStop",
+      "response": "ResearchStop"
+    },
+    {
+      "method": "screen.batchPause",
+      "request": "NoParams",
+      "response": "OptionalScreenBatch"
+    },
+    {
+      "method": "screen.batchStart",
+      "request": "BatchStartRequest",
+      "response": "ScreenBatch"
+    },
+    {
+      "method": "screen.batchStatus",
+      "request": "NoParams",
+      "response": "OptionalScreenBatch"
+    },
+    {
+      "method": "screen.definitions",
+      "request": "NoParams",
+      "response": "ScreenDefinitions"
+    },
+    {
+      "method": "screen.latest",
+      "request": "NoParams",
+      "response": "LatestScreen"
+    },
+    {
+      "method": "screen.page",
+      "request": "ScreenPageRequest",
+      "response": "ScreenPage"
+    },
+    {
+      "method": "screen.prepare",
+      "request": "PoolPrepareRequest",
+      "response": "ScreenPoolPlan"
+    },
+    {
+      "method": "screen.run",
+      "request": "ScreenRunRequest",
+      "response": "ScreenPage"
+    },
+    {
+      "method": "screen.save",
+      "request": "ScreenDefinition",
+      "response": "ScreenDefinitions"
+    },
+    {
+      "method": "sector.ensure",
+      "request": "SectorHistoryEnsure",
+      "response": "DemandState"
+    },
+    {
+      "method": "sector.history",
+      "request": "SectorRequest",
+      "response": "SectorHistoryResult"
+    },
+    {
+      "method": "sector.members",
+      "request": "SectorMembersRequest",
+      "response": "SectorMembers"
+    },
+    {
+      "method": "sectors.ensure",
+      "request": "MarketEnsureRequest",
+      "response": "DemandState"
+    },
+    {
+      "method": "sectors.read",
+      "request": "NoParams",
+      "response": "SectorReadResult"
+    },
+    {
+      "method": "sectors.summary",
+      "request": "NoParams",
+      "response": "SectorSummaryResult"
+    },
+    {
+      "method": "settings.save",
+      "request": "Settings",
+      "response": "Settings"
+    },
+    {
+      "method": "storage.compact",
+      "request": "NoParams",
+      "response": "CompactionResult"
+    },
+    {
+      "method": "watchlists.add",
+      "request": "WatchlistChangeRequest",
+      "response": "InstrumentList"
+    },
+    {
+      "method": "watchlists.create",
+      "request": "WatchlistCreateRequest",
+      "response": "Watchlist"
+    },
+    {
+      "method": "watchlists.list",
+      "request": "NoParams",
+      "response": "WatchlistList"
+    },
+    {
+      "method": "watchlists.members",
+      "request": "WatchlistMembersRequest",
+      "response": "InstrumentList"
+    },
+    {
+      "method": "watchlists.remove",
+      "request": "WatchlistChangeRequest",
+      "response": "InstrumentList"
+    },
+    {
+      "method": "watchlists.rename",
+      "request": "WatchlistRenameRequest",
+      "response": "Watchlist"
+    },
+    {
+      "method": "watchlists.reorder",
+      "request": "WatchlistReorderRequest",
+      "response": "InstrumentList"
+    }
+  ]
+}

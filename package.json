@@ -1,0 +1,99 @@
+{
+  "name": "stock-workshop",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "description": "Stock Loom · 观市 — local-first A-share workspace with Codex Copilot",
+  "author": "CrxzyChen",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main/main.cjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:ui": "vite --config apps/desktop/vite.config.ts --host 127.0.0.1",
+    "build": "node scripts/build-desktop.mjs",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "node --test tests/node/*.test.mjs",
+    "test:python": "node scripts/test-python.mjs",
+    "build:service": "node scripts/build-service.mjs",
+    "package:dir": "node scripts/package-windows.mjs --dir",
+    "package:win": "node scripts/package-windows.mjs",
+    "progress": "node scripts/build-progress.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@openai/codex-sdk": "0.154.0",
+    "cron-parser": "5.10.0",
+    "markdown-it": "15.0.2",
+    "vue": "3.5.42",
+    "zod": "4.6.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.8",
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vite": "8.3.0",
+    "vue-tsc": "3.3.11"
+  },
+  "build": {
+    "appId": "com.crxzy.stock",
+    "productName": "Stock Loom",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/service/stock-data",
+        "to": "service"
+      },
+      {
+        "from": "node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin",
+        "to": "codex"
+      },
+      {
+        "from": "validation/codex-readonly-probe.json",
+        "to": "codex-readonly-probe.json"
+      },
+      {
+        "from": "validation/codex-mcp-electron-probe.json",
+        "to": "codex-mcp-electron-probe.json"
+      },
+      {
+        "from": "dist/tools",
+        "to": "tools"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "artifactName": "Stock-Loom-${version}-${arch}.${ext}"
+  },
+  "homepage": "https://github.com/CrxzyChen/stock-loom",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CrxzyChen/stock-loom.git"
+  }
+}

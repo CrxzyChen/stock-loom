@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {versionParts} from '../apps/desktop/src/main/updates.mjs';
+const build=JSON.parse(fs.readFileSync('build/package-current.json','utf8'));
+const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;versionParts(version);
+const installer=path.join(build.directory,`Stock-Loom-${version}-x64.exe`);
+const bytes=fs.readFileSync(installer);
+const manifest={format:1,version,platform:'win32-x64',minDataSchema:5,maxDataSchema:build.service.schemaVersion??5,size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),notes:'开发预览，未完成正式 MVP 验收。请阅读 release-notes-0.1-preview.md；当前构建未签名。'};
+fs.writeFileSync(path.join(build.directory,'stock-update.json'),JSON.stringify(manifest,null,2));
+console.log('Created local update manifest; no upload performed.');

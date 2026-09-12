@@ -1,0 +1,12 @@
+import fs from 'node:fs/promises';import path from 'node:path';import {execFileSync} from 'node:child_process';import {createHash} from 'node:crypto';
+const binary=path.resolve('node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe'),folder=await fs.mkdtemp(path.resolve('.runtime/tests/round2-scheduler-'));
+const schemaFolder=path.join(folder,'schema');
+const run=args=>execFileSync(binary,args,{encoding:'utf8',windowsHide:true});
+run(['app-server','generate-json-schema','--experimental','--out',schemaFolder]);
+const schema=JSON.parse(await fs.readFile(path.join(schemaFolder,'ClientRequest.json'),'utf8'));
+const methods=[];function visit(value){if(!value||typeof value!=='object')return;if(value.properties?.method?.enum)methods.push(...value.properties.method.enum);for(const child of Object.values(value))if(typeof child==='object')visit(child)}visit(schema);
+const featureLines=run(['features','list']).split(/\r?\n/).filter(x=>/schedul|automation|cron/i.test(x));
+const plugin=JSON.parse(await fs.readFile(path.join(schemaFolder,'v2/PluginReadResponse.json'),'utf8'));
+const record={checkedAt:new Date().toISOString(),binarySha256:createHash('sha256').update(await fs.readFile(binary)).digest('hex'),runtime:run(['--version']).trim(),folder,experimentalClientMethods:[...new Set(methods)].sort(),schedulerMethods:methods.filter(m=>/schedul|automation|cron/i.test(m)),featureLines,pluginScheduleTemplateFields:Object.keys(plugin.definitions?.ScheduledTaskSummary?.properties??{}),embeddedSchedulerVerified:false,reason:'No scheduler management or run-state methods exposed by this runtime schema. Desktop-host capability is not inherited by a third-party app-server client.'};
+await fs.writeFile(path.join(folder,'cli-help.txt'),run(['--help']));await fs.writeFile(path.join(folder,'app-server-help.txt'),run(['app-server','--help']));
+await fs.writeFile('validation/round2-scheduler.json',JSON.stringify(record,null,2));console.log(JSON.stringify({...record,experimentalClientMethods:record.experimentalClientMethods.length}));

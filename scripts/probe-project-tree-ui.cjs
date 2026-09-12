@@ -1,0 +1,12 @@
+const {app}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const directory=fs.mkdtempSync(path.resolve('.runtime/tests/project-tree-ui-'));app.setPath('userData',directory);app.disableHardwareAcceleration();let started=false;const record={passed:false};const timer=setTimeout(()=>finish(Error('timeout')),40000);
+function finish(e){clearTimeout(timer);record.passed=!e;if(e)record.error=e.stack;fs.writeFileSync('validation/project-tree-ui.json',JSON.stringify(record,null,2));app.exit(e?1:0)}
+app.on('browser-window-created',(_,win)=>{if(started)return;started=true;win.webContents.once('did-finish-load',()=>void(async()=>{
+const js=s=>{record.step=s.slice(0,130);return win.webContents.executeJavaScript(s)},pause=()=>new Promise(r=>setTimeout(r,150)),wait=async s=>{for(let i=0;i<120;i++){if(await js(`Boolean(${s})`))return;await pause()}throw Error(s)};
+await wait('window.stock');await js(`Array.from(document.querySelectorAll('.activity button')).find(b=>b.textContent.includes('项目')).click()`);await wait(`document.querySelector('.tree-row')`);
+await js(`window.stock.projectManage({action:'file',path:'',name:'preview.md'})`);const f=await js(`window.stock.projectRead('preview.md')`);await js(`window.stock.projectWrite('preview.md',${JSON.stringify('# Preview\n\n**Readable** report')},${JSON.stringify(f.revision)})`);
+await wait(`Array.from(document.querySelectorAll('.tree-row')).some(b=>b.textContent.includes('preview.md'))`);record.autoRefresh=true;
+await js(`Array.from(document.querySelectorAll('.tree-row')).find(b=>b.textContent.includes('preview.md')).click()`);await wait(`document.querySelector('.project-markdown strong')`);record.markdown=true;
+await js(`document.querySelector('[aria-label="搜索文件"]').click()`);await js(`const i=document.querySelector('[aria-label="搜索文件名"]');i.value='preview';i.dispatchEvent(new Event('input',{bubbles:true}))`);await wait(`document.querySelectorAll('.tree-row').length===1`);assert.ok(await js(`document.querySelector('.tree-row').textContent.includes('preview.md')`));record.search=true;
+await js(`document.querySelector('.tree-row').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:190,clientY:190}))`);await wait(`document.querySelector('.tree-menu')`);record.screenshot=path.join(directory,'tree.png');fs.writeFileSync(record.screenshot,(await win.webContents.capturePage()).toPNG());finish();
+})().catch(finish))});require(path.resolve('dist/main/main.cjs'));

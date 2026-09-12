@@ -1,0 +1,18 @@
+import fs from 'node:fs';
+const file='packages/contracts/schema.json',s=JSON.parse(fs.readFileSync(file,'utf8')),d=s.$defs;
+const ref=n=>({$ref:'#/$defs/'+n}),string={type:'string'},number={type:'number'},nullable={anyOf:[number,{type:'null'}]};
+const object=properties=>({type:'object',additionalProperties:false,properties,required:Object.keys(properties)});
+d.IndexId={enum:['000001.SH','399001.SZ','399006.SZ','000300.SH']};
+d.IndexRow=object({date:string,open:number,high:number,low:number,close:number,pre_close:nullable,change:nullable,pct_chg:nullable,volume:nullable,amount:nullable});
+d.IndexSnapshot=object({snapshotId:string,indexId:ref('IndexId'),name:string,provider:{const:'tushare'},collectedAt:string,asOf:string,start:string,end:string,items:{type:'array',items:ref('IndexRow'),maxItems:7999}});
+d.OptionalIndexSnapshot={anyOf:[ref('IndexSnapshot'),{type:'null'}]};
+d.IndexLatestRequest=object({indexId:ref('IndexId')});d.IndexVersionRequest=object({indexId:ref('IndexId'),snapshotId:string});
+d.IndexReadRequest={anyOf:[ref('IndexLatestRequest'),ref('IndexVersionRequest')]};
+d.IndexSyncJobParams=object({indexId:ref('IndexId'),start:string,end:string});
+d.IndexSyncRequest=object({token:string,...d.IndexSyncJobParams.properties});
+d.IndexSyncJobRequest=object({kind:{const:'index.sync'},token:string,params:ref('IndexSyncJobParams')});
+for(const [target,name] of [['JobEnqueueRequest','IndexSyncJobRequest'],['JobResult','IndexSnapshot']])if(!d[target].anyOf.some(x=>x.$ref===ref(name).$ref))d[target].anyOf.push(ref(name));
+s['x-rpc-requests']['index.read']='IndexReadRequest';s['x-rpc-responses']['index.read']='OptionalIndexSnapshot';s['x-rpc-requests']['index.sync']='IndexSyncRequest';s['x-rpc-responses']['index.sync']='IndexSnapshot';
+const ordered=['IndexId','IndexRow','IndexSnapshot','OptionalIndexSnapshot','IndexLatestRequest','IndexVersionRequest','IndexReadRequest','IndexSyncJobParams','IndexSyncRequest','IndexSyncJobRequest'];
+s.$defs=Object.fromEntries([...ordered.map(k=>[k,d[k]]),...Object.entries(d).filter(([k])=>!ordered.includes(k))]);
+fs.writeFileSync(file,JSON.stringify(s,null,2)+'\n');

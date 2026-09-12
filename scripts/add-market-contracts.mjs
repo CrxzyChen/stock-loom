@@ -1,0 +1,18 @@
+import fs from 'node:fs';
+const file='packages/contracts/schema.json',s=JSON.parse(fs.readFileSync(file,'utf8')),d=s.$defs;
+const ref=n=>({$ref:'#/$defs/'+n}),string={type:'string'},number={type:'number'},nullable={anyOf:[number,{type:'null'}]};
+const object=properties=>({type:'object',additionalProperties:false,properties,required:Object.keys(properties)});
+d.MarketId={enum:['SH_A','SZ_A','SH_STAR','SZ_GEM','SZ_STOCK']};
+d.MarketRow=object({date:string,com_count:nullable,total_share:nullable,float_share:nullable,total_mv:nullable,float_mv:nullable,amount:nullable,vol:nullable,trans_count:nullable,pe:nullable,tr:nullable});
+d.MarketSnapshot=object({snapshotId:string,marketId:ref('MarketId'),name:string,endpoint:{enum:['daily_info','sz_daily_info']},provider:{const:'tushare'},collectedAt:string,asOf:string,start:string,end:string,items:{type:'array',items:ref('MarketRow'),minItems:1,maxItems:3999}});
+d.OptionalMarketSnapshot={anyOf:[ref('MarketSnapshot'),{type:'null'}]};
+d.MarketLatestRequest=object({marketId:ref('MarketId')});d.MarketVersionRequest=object({marketId:ref('MarketId'),snapshotId:string});
+d.MarketReadRequest={anyOf:[ref('MarketLatestRequest'),ref('MarketVersionRequest')]};
+d.MarketSyncJobParams=object({marketId:ref('MarketId'),start:string,end:string});
+d.MarketSyncRequest=object({token:string,...d.MarketSyncJobParams.properties});
+d.MarketSyncJobRequest=object({kind:{const:'market.sync'},token:string,params:ref('MarketSyncJobParams')});
+for(const [target,name] of [['JobEnqueueRequest','MarketSyncJobRequest'],['JobResult','MarketSnapshot']])if(!d[target].anyOf.some(x=>x.$ref===ref(name).$ref))d[target].anyOf.push(ref(name));
+s['x-rpc-requests']['market.read']='MarketReadRequest';s['x-rpc-responses']['market.read']='OptionalMarketSnapshot';s['x-rpc-requests']['market.sync']='MarketSyncRequest';s['x-rpc-responses']['market.sync']='MarketSnapshot';
+const ordered=['MarketId','MarketRow','MarketSnapshot','OptionalMarketSnapshot','MarketLatestRequest','MarketVersionRequest','MarketReadRequest','MarketSyncJobParams','MarketSyncRequest','MarketSyncJobRequest'];
+s.$defs=Object.fromEntries([...ordered.map(k=>[k,d[k]]),...Object.entries(d).filter(([k])=>!ordered.includes(k))]);
+fs.writeFileSync(file,JSON.stringify(s,null,2)+'\n');

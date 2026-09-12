@@ -1,0 +1,14 @@
+import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import electron from 'electron';
+const base=path.resolve('.runtime/tests');fs.mkdirSync(base,{recursive:true});const directory=fs.mkdtempSync(path.join(base,'market-ui-'));
+const wideMa=process.argv.includes('--wide-ma');
+const seeded=spawnSync(path.resolve('.venv312/Scripts/python.exe'),[path.resolve('scripts/seed-market-ui.py'),directory,...(wideMa?['--wide-ma']:[])],{stdio:'inherit',windowsHide:true});assert.equal(seeded.status,0);
+const financial=process.argv.includes('--financial');
+const restoreFull=process.argv.includes('--restore-full');
+const lateSync=process.argv.includes('--late-sync'),compactFailure=process.argv.includes('--compact-failure'),compact=process.argv.includes('--compact')||compactFailure;
+assert.ok(Number(financial)+Number(wideMa)+Number(lateSync)+Number(compact)+Number(restoreFull)<=1,'Choose one scenario');
+const result=spawnSync(electron,[path.resolve(restoreFull?'scripts/probe-restore-full-ui.cjs':compact?'scripts/probe-compact-ui.cjs':financial?'scripts/probe-financial-ui.cjs':lateSync?'scripts/probe-market-late-sync.cjs':'scripts/probe-market-ui.cjs'),directory,...(wideMa?['--wide-ma']:[]),...(compactFailure?['--failure']:[])],{stdio:'inherit',timeout:40000,windowsHide:true});assert.equal(result.status,0);
+const stage=JSON.parse(fs.readFileSync(path.join(directory,'result.json')));assert.equal(stage.passed,true,stage.error);
+const rendererAssets=[...fs.readFileSync('dist/renderer/index.html','utf8').matchAll(/(?:src|href)="\.\/(assets\/[A-Za-z0-9_.-]+\.(?:js|css))"/g)].map(match=>'dist/renderer/'+match[1]);assert.ok(rendererAssets.length>=2,'Renderer entry assets required');
+const evidenceFiles=['dist/main/main.cjs','dist/main/preload.cjs','dist/renderer/index.html',...rendererAssets,'apps/data-service/main.py','scripts/seed-market-ui.py','scripts/run-market-ui-probe.mjs',...(financial?['scripts/probe-financial-ui.cjs']:[])];
+const hashes=Object.fromEntries(evidenceFiles.map(file=>[file,createHash('sha256').update(fs.readFileSync(file)).digest('hex')]));
+const record={createdAt:new Date().toISOString(),directory,...stage,hashes};fs.writeFileSync(restoreFull?'validation/restore-full-ui-probe.json':compactFailure?'validation/compact-ui-failure-probe.json':compact?'validation/compact-ui-probe.json':financial?'validation/financial-ui-probe.json':wideMa?'validation/chart-ma-extent-probe.json':lateSync?'validation/market-late-sync-probe.json':'validation/market-ui-probe.json',JSON.stringify(record,null,2));console.log(JSON.stringify(record));

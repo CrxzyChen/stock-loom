@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+const base=path.resolve('.runtime/codex-probes');fs.mkdirSync(base,{recursive:true});
+const home=fs.mkdtempSync(path.join(base,'isolated-'));
+const binary=path.resolve('node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe');
+const env={CODEX_HOME:home};
+for(const key of ['SystemRoot','WINDIR','TEMP','TMP','PATH','USERPROFILE','LOCALAPPDATA'])if(process.env[key])env[key]=process.env[key];
+const features=['shell_tool','unified_exec','apps','plugins','hooks','multi_agent','browser_use','browser_use_external','computer_use','image_generation','code_mode_host','skill_search','skill_mcp_dependency_install'];
+const args=['features','list',...features.flatMap(name=>['-c',`features.${name}=false`])];
+const result=spawnSync(binary,args,{env,cwd:home,encoding:'utf8',windowsHide:true,timeout:15000});
+const lines=(result.stdout??'').split(/\r?\n/);
+const observed=Object.fromEntries(features.map(name=>[name,lines.find(line=>line.startsWith(name+' '))?.trim().split(/\s+/).at(-1)??'missing']));
+const report={version:'0.154.0',exitCode:result.status,observed,allDisabled:Object.values(observed).every(value=>value==='false')};
+fs.writeFileSync(path.resolve('validation/codex-capability-probe.json'),JSON.stringify(report,null,2)+'\n');
+console.log(JSON.stringify(report,null,2));
+process.exitCode=result.status===0?0:1;

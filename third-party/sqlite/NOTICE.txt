@@ -1,0 +1,12 @@
+SQLite 3.53.1
+
+The SQLite authors dedicate the deliverable SQLite code and documentation to
+the public domain. This note records the upstream statement; it is not a new
+license or a warranty of title.
+
+Official statement: https://www.sqlite.org/copyright.html
+Reviewed: 2026-09-11
+
+Version source: sqlite3.sqlite_version from the Python runtime used to build
+Stock Workshop. Build-system dependencies and other native libraries require
+their own provenance review.

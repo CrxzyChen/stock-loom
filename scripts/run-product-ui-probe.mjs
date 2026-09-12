@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import electron from 'electron';
+const started=Date.now();
+const result=spawnSync(electron,[path.resolve('scripts/probe-product-ui.cjs')],{stdio:'inherit',timeout:45000,windowsHide:true});
+assert.equal(result.status,0,'Product Main did not exit cleanly');
+const record=JSON.parse(fs.readFileSync('validation/product-ui-probe.json','utf8'));
+assert.ok(Date.parse(record.createdAt)>=started,'Probe record is stale');
+assert.equal(record.passed,true,record.error||'Product UI probe failed');
+console.log(JSON.stringify({passed:true,directory:record.directory,pages:record.pages.length}));

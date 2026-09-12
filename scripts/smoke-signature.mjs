@@ -1,0 +1,11 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {inspectSignature,verifyInstallerPublisher} from '../apps/desktop/src/main/installer-signature.mjs';
+const base=path.resolve('.runtime/tests');await fs.mkdir(base,{recursive:true});const folder=await fs.mkdtemp(path.join(base,'signature-'));
+const candidate=path.join(folder,'installer [fixture];$(ignored).exe');await fs.writeFile(candidate,'synthetic non-executable signature fixture');
+const inspected=await inspectSignature(candidate);assert.notEqual(inspected.status,'Valid');
+const build=JSON.parse(await fs.readFile('build/package-current.json','utf8'));
+const unsigned=await verifyInstallerPublisher(path.join(build.directory,'Stock-Loom-0.1.0-x64.exe'),path.join(build.directory,'win-unpacked/Stock Loom.exe'));
+assert.equal(unsigned.verified,false);
+await fs.writeFile('validation/signature-probe.json',JSON.stringify({createdAt:new Date().toISOString(),literalPathRejected:inspected.status!=='Valid',unsignedBuildRejected:!unsigned.verified,reason:unsigned.reason,installerExecuted:false},null,2));

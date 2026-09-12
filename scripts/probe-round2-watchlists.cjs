@@ -1,0 +1,23 @@
+const {app}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
+const directory=fs.mkdtempSync(path.resolve('.runtime/tests/market-ui-watchlists-'));execFileSync(path.resolve('.venv312/Scripts/python.exe'),['scripts/seed-market-ui.py',directory]);app.setPath('userData',directory);app.disableHardwareAcceleration();
+const record={passed:false,directory,realDesktop:true,syntheticMarketData:true};let started=false;const timer=setTimeout(()=>app.exit(1),45000);
+app.on('browser-window-created',(_,win)=>{if(started)return;started=true;win.webContents.once('did-finish-load',()=>void(async()=>{
+ const js=s=>win.webContents.executeJavaScript(s),wait=async s=>{for(let i=0;i<120;i++){if(await js(s))return;await new Promise(r=>setTimeout(r,100))}throw Error('UI wait: '+s)};
+ const click=async label=>{await wait(`Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim().endsWith(${JSON.stringify(label)})&&!b.disabled)`);await js(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim().endsWith(${JSON.stringify(label)})&&!b.disabled).click()`)};
+ await wait(`window.stock.serviceStatus().then(x=>x.state==='ready')`);assert.equal((await js('window.stock.watchlists()')).length,0);
+ await click('我的股票');await click('全部自选');await wait(`document.querySelector('#stock-query')!==null`);
+ await js(`(()=>{const q=document.querySelector('#stock-query');q.value='000001';q.dispatchEvent(new Event('input',{bubbles:true}))})()`);await click('搜索本地目录');await click('加入自选');
+ await wait(`document.querySelector('.watchlist-panel caption')?.textContent.includes('全部自选 · 1 只')`);
+ await wait(`document.querySelector('.watchlist-panel').textContent.includes('11.10')&&document.querySelector('.watchlist-panel').textContent.includes('20240701')`);record.cachedPriceAndDate=true;
+ assert.equal(await js(`document.querySelectorAll('dialog[open]').length`),0);const groups=await js('window.stock.watchlists()');assert.equal(groups.length,1);record.noGroupPrerequisite=true;
+ const other=await js(`window.stock.createWatchlist('另一分组')`);await js(`window.stock.addWatchlistMember(${JSON.stringify(other.id)},'000002.SZ')`);await js(`window.stock.addWatchlistMember(${JSON.stringify(other.id)},'000001.SZ')`);
+ await new Promise(resolve=>{win.webContents.once('did-finish-load',resolve);win.webContents.reload()});await wait(`document.querySelector('.watchlist-panel caption')?.textContent.includes('全部自选 · 2 只')`);record.unionDeduplicated=true;
+ await wait(`document.querySelector('.watchlist-panel').textContent.includes('未同步日线')`);record.missingPriceExplicit=true;
+ await js(`(()=>{const s=document.querySelector('#active-group');s.value=${JSON.stringify(groups[0].id)};s.dispatchEvent(new Event('change',{bubbles:true}))})()`);await wait(`document.querySelector('.watchlist-panel caption')?.textContent.includes('分组成员 · 1 只')`);
+ await click('全部自选');await wait(`document.querySelector('.watchlist-panel caption')?.textContent.includes('全部自选 · 2 只')`);record.allSelectionResetsGroup=true;
+ await js(`document.querySelector('[aria-label="从全部自选移除 合成日线验收股票"]').click()`);await wait(`document.querySelector('.watchlist-panel caption')?.textContent.includes('全部自选 · 1 只')`);
+ assert.equal((await js(`window.stock.watchlistMembers(${JSON.stringify(groups[0].id)})`)).length,0);assert.equal((await js(`window.stock.watchlistMembers(${JSON.stringify(other.id)})`)).length,1);record.removeAcrossGroups=true;
+ win.setContentSize(1440,900);await new Promise(r=>setTimeout(r,200));record.screenshot=path.join(directory,'watchlists.png');fs.writeFileSync(record.screenshot,(await win.webContents.capturePage()).toPNG());assert.ok(await js('document.documentElement.scrollWidth<=innerWidth'));
+ record.passed=true;clearTimeout(timer);fs.writeFileSync('validation/round2-watchlists-ui.json',JSON.stringify(record,null,2));app.quit();
+})().catch(error=>{record.error=error.stack;clearTimeout(timer);fs.writeFileSync('validation/round2-watchlists-ui.json',JSON.stringify(record,null,2));app.exit(1)}));});
+require(path.resolve('dist/main/main.cjs'));

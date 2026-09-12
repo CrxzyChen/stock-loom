@@ -1,0 +1,26 @@
+node_modules/
+.venv/
+.venv312/
+build/service-builds/
+build/service-current.json
+build/package-current.json
+build/notices/
+dist/
+release/
+build/service/
+build/pyinstaller/
+.runtime/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+*.log
+
+# Local development records and generated evidence
+/build/
+/validation/*
+!/validation/codex-readonly-probe.json
+!/validation/codex-mcp-electron-probe.json
+/docs/*
+!/docs/alpha-release.md

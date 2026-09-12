@@ -1,0 +1,73 @@
+.round2-shell .activity button{font-size:0.846154rem;padding-inline:3px}
+.panel-icon{display:block;font-size:1.846154rem;line-height:28px}
+.round2-shell .workarea{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.round2-shell .page-heading{padding:12px 20px;flex-shrink:0}
+.round2-shell .page-heading h1{font-size:1.384615rem}
+.round2-shell .page-heading .eyebrow{display:none}
+.work-tabs{display:flex;flex-shrink:0;overflow-x:auto;min-height:39px;background:var(--raised);border-bottom:1px solid var(--line)}
+.work-tab{display:flex;flex-shrink:0;border-right:1px solid var(--line);border-top:2px solid transparent}
+.work-tab.selected{background:var(--surface);border-top-color:var(--accent)}
+.work-tab button{border:0;border-radius:0;background:transparent;padding:7px 10px;white-space:nowrap}
+.work-tab button:last-child{padding-inline:7px;color:var(--muted)}
+.tab-content{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
+.round2-shell .inspector{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.round2-shell .inspector .region-heading{flex-shrink:0}
+.round2-shell .inspector .copilot-panel{flex:1;min-height:0;height:auto}
+.project-path{overflow-wrap:anywhere}
+.round2-shell textarea{font:inherit;color:var(--text);background:var(--canvas);border:1px solid var(--line-strong);border-radius:4px;padding:10px}
+.desktop-shell.round2-shell:has(.inspector){--left-column:var(--context-width,208px);--right-column:var(--inspector-width,320px);grid-template-columns:5.076923rem var(--left-column) minmax(0,1fr) var(--right-column)}
+.desktop-shell.round2-shell.context-hidden{--left-column:0px}
+.desktop-shell.round2-shell.copilot-hidden{--right-column:0px}
+.round2-shell .activity{grid-column:1;grid-row:2}
+.round2-shell .context{grid-column:2;grid-row:2;position:relative;display:flex}
+.round2-shell .workarea{grid-column:3;grid-row:2;min-width:0}
+.round2-shell .inspector{grid-column:4;grid-row:2}
+.context-resize{position:absolute;right:0;top:0;bottom:0;width:7px;cursor:col-resize;touch-action:none;z-index:2}
+.context-resize:hover,.context-resize:focus-visible{background:var(--accent-soft);outline:1px solid var(--accent);outline-offset:-1px}
+@media(max-width:1150px){.desktop-shell.round2-shell:has(.inspector){--right-column:0px}.round2-shell .inspector{width:min(var(--inspector-width,320px),calc(100vw - 5.076923rem))}.round2-shell .inspector-resize{display:block;position:absolute;left:0;top:0;bottom:0;width:8px;cursor:col-resize;touch-action:none}}
+@media(max-width:600px){.desktop-shell.round2-shell:has(.inspector){--left-column:0px}.round2-shell .context{position:fixed;left:5.076923rem;top:49px;bottom:27px;width:min(var(--context-width,208px),calc(100vw - 5.076923rem));z-index:9}}
+
+/* Tabs and conversation share the central workspace, including narrow windows. */
+.desktop-shell.round2-shell:has(.inspector){grid-template-columns:5.076923rem var(--left-column) minmax(0,1fr)}
+.central-workspace{grid-column:3;grid-row:2;display:grid;grid-template-columns:minmax(0,1fr) var(--conversation-column);min-width:0;min-height:0;overflow:hidden}
+.central-workspace.conversation-hidden{grid-template-columns:minmax(0,1fr) 0px}
+.round2-shell .central-workspace .workarea{grid-column:1;grid-row:1;min-width:0}
+.round2-shell .central-workspace .inspector{grid-column:2;grid-row:1;position:relative;inset:auto;width:auto;min-width:0;z-index:auto;border-left:1px solid var(--line);background:var(--surface)}
+.round2-shell .central-workspace .inspector-resize{display:block;position:absolute;left:-4px;top:0;bottom:0;width:8px;z-index:3;cursor:col-resize;touch-action:none}
+.round2-shell .central-workspace .inspector{overflow:visible}
+.round2-shell .central-workspace .copilot-panel{overflow:hidden}
+.central-workspace .page-heading{flex-wrap:wrap;gap:8px}
+
+.central-workspace.tabs-hidden{grid-template-columns:0px minmax(0,1fr)}
+.quick-layout{display:flex;gap:2px;-webkit-app-region:no-drag}.quick-layout button{min-height:28px;padding:3px 10px;border:0;background:transparent}.quick-layout button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent)}
+.round2-shell .activity .settings-entry{margin-top:0}.settings-entry svg{display:block;width:24px;height:24px;margin:0 auto 4px}
+.round2-shell .statusbar{font-size:1rem;min-height:32px}.desktop-shell.round2-shell{grid-template-rows:49px minmax(0,1fr) 32px}.footer-status{display:flex;align-items:center;gap:18px;min-width:0}.footer-status .connection{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.round2-shell .statusbar .footer-status>span:last-child{display:inline}
+
+.round2-shell .activity>button:nth-last-child(2){margin-top:auto}
+
+.ui-action .action-icon{width:16px;height:16px;display:inline-block;vertical-align:middle;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;pointer-events:none}
+.ui-action .action-label{margin-left:6px;vertical-align:middle}.ui-action.ui-icon-only{min-width:32px;width:32px;min-height:32px;padding:6px;flex-shrink:0}
+.action-label-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important}
+.ui-action:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.tabs-header{display:flex;align-items:center;flex-shrink:0;min-width:0;min-height:39px;background:var(--raised);border-bottom:1px solid var(--line)}.tabs-header .work-tabs{flex:1;min-width:0;border-bottom:0}.tabs-conversation-toggle{margin:0 6px}
+.round2-shell .activity svg.panel-icon{display:block;width:24px;height:28px;margin:0 auto 4px}.round2-shell .conversation-header .ui-icon-only{min-height:28px}
+
+/* Flat controls: surfaces express interaction; outlines only indicate keyboard focus. */
+.desktop-shell.round2-shell button{border:0!important;box-shadow:none!important;background:transparent}
+.desktop-shell.round2-shell button:hover:enabled{background:var(--overlay)}
+.desktop-shell.round2-shell button:active:enabled{background:var(--line)}
+.desktop-shell.round2-shell button.primary{color:var(--accent)}
+.desktop-shell.round2-shell button[aria-pressed=true],.desktop-shell.round2-shell button[aria-current=true],.desktop-shell.round2-shell .activity button.selected{background:var(--accent-soft);color:var(--accent)}
+.desktop-shell.round2-shell button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.desktop-shell.round2-shell .window-close:hover{background:#c42b3a;color:#fff}
+
+/* Compact panel chrome, with 28px control targets. */
+.round2-shell .context>.region-heading{height:34px;min-height:34px;padding:2px 12px}
+.round2-shell .tabs-header,.round2-shell .work-tabs{height:34px;min-height:34px}
+.round2-shell .tabs-header .work-tabs{height:33px;min-height:33px}
+.round2-shell .work-tab button{min-height:28px;padding:2px 10px}
+.round2-shell .context>.region-heading .ui-icon-only,.round2-shell .tabs-header .ui-icon-only{width:28px;min-width:28px;min-height:28px;height:28px;padding:5px}
+.round2-shell .conversation-header{height:34px;min-height:34px;padding:2px 12px}
+.round2-shell .history-toolbar{height:34px;min-height:34px;padding:2px 8px}
+.round2-shell .conversation-header .ui-icon-only,.round2-shell .history-toolbar .ui-icon-only{width:28px;min-width:28px;height:28px;min-height:28px;padding:5px}
+.round2-shell .scheduler-tabs button{height:32px;min-height:32px;padding:4px 10px}

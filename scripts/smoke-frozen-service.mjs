@@ -1,0 +1,92 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {ServiceClient} from '../apps/desktop/src/main/service-client.mjs';
+const serviceOnly=process.argv.includes('--service-build');
+const packaged=serviceOnly?null:JSON.parse(fs.readFileSync('build/package-current.json','utf8'));
+const build=serviceOnly?JSON.parse(fs.readFileSync('build/service-current.json','utf8')):packaged.service;
+const root=path.resolve('.runtime/tests');fs.mkdirSync(root,{recursive:true});
+const directory=fs.mkdtempSync(path.join(root,'frozen-service-'));
+const binary=serviceOnly?path.join(build.directory,'stock-data.exe'):path.join(packaged.directory,'win-unpacked/resources/service/stock-data.exe');
+assert.equal(createHash('sha256').update(fs.readFileSync(binary)).digest('hex'),build.binarySha256);
+const seeded=spawnSync(path.resolve('.venv312/Scripts/python.exe'),[path.resolve('scripts/seed-frozen-fixture.py'),directory],{encoding:'utf8',windowsHide:true});
+assert.equal(seeded.status,0,'Synthetic fixture creation failed');const fixture=JSON.parse(seeded.stdout);
+const systemPath=process.argv.includes('--system-path');
+const env={...process.env};
+if(systemPath){
+  for(const key of Object.keys(env))if(['PATH','PYTHONHOME','PYTHONPATH'].includes(key.toUpperCase()))delete env[key];
+  const systemRoot=process.env.SystemRoot??process.env.SYSTEMROOT;assert.ok(systemRoot&&path.isAbsolute(systemRoot));
+  env.PATH=[path.dirname(binary),path.join(systemRoot,'System32'),systemRoot].join(path.delimiter);
+}
+const client=new ServiceClient(binary,['--data-dir',directory],{env});
+const result={createdAt:new Date().toISOString(),binarySha256:build.binarySha256,fixture:'synthetic OHLC and factors; no market API or model called',passed:false};
+result.systemPathOnly=systemPath;
+try{
+  await client.start();assert.equal((await client.call('overview')).schemaVersion,build.schemaVersion??5);
+  const batch=await client.call('screen.batchStatus');
+  assert.equal(batch.planId,fixture.planId);assert.equal(batch.state,'paused');assert.equal(batch.completedTasks,0);
+  const interrupted=await client.call('jobs.list');
+  assert.equal(interrupted.length,1);assert.equal(interrupted[0].id,fixture.pendingJobId);assert.equal(interrupted[0].state,'interrupted');
+  let taskEvents;
+  if(build.schemaVersion>=7){
+    assert.equal(interrupted[0].attempt,0);assert.equal(interrupted[0].generation,0);
+    assert.equal(interrupted[0].startedAt,null);assert.ok(interrupted[0].finishedAt);
+    taskEvents=await client.call('jobs.events',{after:0});
+    assert.deepEqual(taskEvents.items.map(item=>item.state),['queued','interrupted']);
+    assert.ok(taskEvents.items.every(item=>item.jobId===fixture.pendingJobId));
+    assert.equal(taskEvents.hasMore,false);assert.equal(taskEvents.profileId,interrupted[0].profileId);
+    assert.deepEqual((await client.call('jobs.events',{after:taskEvents.nextAfter})).items,[]);
+    await assert.rejects(client.call('jobs.events',{after:-1}),/INVALID_PARAMS/);
+    result.taskEventsReplayed=true;
+  }
+  assert.deepEqual(await client.call('screen.batchPause'),batch);
+  assert.equal((await client.call('jobs.list')).length,1);result.batchRestartPaused=true;
+  assert.deepEqual(await client.call('autosync.policy'),{enabled:false});
+  assert.equal((await client.call('autosync.plan')).state,'disabled');
+  await client.call('autosync.configure',{enabled:true});
+  const syncPlan=await client.call('autosync.plan');
+  assert.equal(syncPlan.state,'calendar');assert.ok(syncPlan.requests.every(item=>item.kind==='calendar.sync'));
+  await client.call('autosync.configure',{enabled:false});result.autoSyncPlanning=true;
+  const watchlist=await client.call('watchlists.create',{name:'冻结服务测试'});
+  const renamed=await client.call('watchlists.rename',{listId:watchlist.id,name:'冻结服务改名'});
+  assert.equal(renamed.id,watchlist.id);assert.equal(renamed.createdAt,watchlist.createdAt);assert.equal(renamed.name,'冻结服务改名');result.watchlistRenamed=true;
+  const bars=await client.call('bars.read',{snapshotId:fixture.snapshotId,adjustment:'forward',offset:0});
+  const provenance=await client.callWithMetadata('bars.read',{snapshotId:fixture.snapshotId,adjustment:'forward',offset:0});assert.equal(provenance.sourceVersion,'snapshot:'+fixture.snapshotId);assert.equal(provenance.dataAsOf,bars.asOf);assert.ok(provenance.requestId);result.rpcProvenance=true;
+  assert.deepEqual(bars.items.map(x=>x.close),[10,10]);assert.equal(bars.items[0].volume,250);assert.equal(bars.items[0].amount,3200);
+  result.parquetRead=true;
+  const screened=await client.call('screen.run',{date:'20240103',conditions:[{field:'price',operator:'gt',value:0}],sort:'id',direction:'asc'});
+  assert.equal(screened.covered,1);assert.equal(screened.items[0].price,10);result.screenWindow=true;
+  assert.deepEqual(await client.call('screen.latest'),screened);
+  const context=await client.call('research.prepare',{instrumentIds:['000001.SZ'],question:'Synthetic frozen runtime verification'});
+  const key={runId:context.runId};
+  const chart=await client.call('research.chart',{...key,instrumentId:'000001.SZ'});assert.equal(chart.rows,2);assert.equal(chart.snapshotId,fixture.snapshotId);result.chartCreated=true;
+  await client.call('research.start',key);
+  await client.call('research.save',{...key,report:{summary:'Synthetic fixture only.',claims:[],limitations:['Financial data is absent.']},model:'fixture',threadId:'fixture',usage:{input_tokens:1,cached_input_tokens:0,output_tokens:1}});
+  assert.equal((await client.call('research.report',key)).payload.report.summary,'Synthetic fixture only.');
+  assert.ok((await client.call('research.export',key)).filename.endsWith('.md'));result.reportExported=true;
+  const compacted=await client.callToCompletion('storage.compact',{});
+  assert.equal(compacted.converted,1);assert.equal(compacted.bundles,1);
+  assert.deepEqual(await client.call('bars.read',{snapshotId:fixture.snapshotId,adjustment:'forward',offset:0}),bars);
+  const repeated=await client.callToCompletion('storage.compact',{});
+  assert.equal(repeated.converted,0);assert.equal(repeated.alreadyBundled,1);result.snapshotCompaction=true;
+  const backup=await client.call('backup.create',{},30000);
+  const restored=await client.call('backup.restore',{archive:backup.path},30000);assert.equal(restored.originalPreserved,true);
+  assert.equal((await client.call('recap.policy')).enabled,false);
+  await client.stop();client.args[client.args.length-1]=path.join(path.dirname(directory),restored.directory);await client.start();
+  assert.equal((await client.call('research.chart',{...key,instrumentId:'000001.SZ'})).artifactId,chart.artifactId);
+  assert.equal((await client.call('research.report',key)).payload.report.summary,'Synthetic fixture only.');result.restoredArtifacts=true;
+  assert.deepEqual(await client.call('screen.latest'),screened);result.restoredLatestScreen=true;
+  assert.deepEqual(await client.call('bars.read',{snapshotId:fixture.snapshotId,adjustment:'forward',offset:0}),bars);result.restoredBundledBars=true;
+  assert.deepEqual(await client.call('screen.batchStatus'),batch);result.restoredPausedBatch=true;
+  if(taskEvents){assert.deepEqual(await client.call('jobs.events',{after:0}),taskEvents);result.restoredTaskEvents=true}
+  await client.stop();await client.start();assert.deepEqual((await client.call('watchlists.list'))[0],renamed);result.restoredRenamedWatchlist=true;
+  const profileValidation=await client.callToCompletion('profile.validate');assert.equal(profileValidation.valid,true);assert.ok(profileValidation.referencedFiles>0);result.profileValidation=true;
+  const chartFile=path.join(client.args.at(-1),'runs',context.runId,'charts',chart.artifactId+'.json');
+  fs.writeFileSync(chartFile,'{"syntheticCorruption":true}');
+  await assert.rejects(client.call('research.chart',{...key,instrumentId:'000001.SZ'}),/CORRUPT_CHART/);result.corruptionRejected=true;
+  await assert.rejects(client.callToCompletion('profile.validate'),/CORRUPT_CHART/);result.profileValidationRejectsCorruption=true;
+  result.passed=true;
+}finally{await client.stop();fs.writeFileSync(serviceOnly?'validation/frozen-service-build-probe.json':'validation/frozen-service-probe.json',JSON.stringify(result,null,2))}
+

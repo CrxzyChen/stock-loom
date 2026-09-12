@@ -1,0 +1,124 @@
+{
+  "version": "0.154.0",
+  "binarySha256": "be96b992178b1e467c225800da0d65f2c86d5eba1ef0b14632f65db381cbdfde",
+  "disabledFeatures": [
+    "shell_tool",
+    "unified_exec",
+    "apps",
+    "plugins",
+    "hooks",
+    "multi_agent",
+    "browser_use",
+    "browser_use_external",
+    "computer_use",
+    "image_generation",
+    "code_mode_host",
+    "skill_search",
+    "skill_mcp_dependency_install",
+    "view_image",
+    "goals"
+  ],
+  "realModelCalled": false,
+  "writeTest": true,
+  "attempts": [
+    "workspace-update",
+    "outside-update",
+    "workspace-create"
+  ],
+  "sentinelUnchanged": true,
+  "captured": [
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        }
+      ],
+      "toolOutputs": []
+    },
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        }
+      ],
+      "toolOutputs": [
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        }
+      ]
+    },
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        }
+      ],
+      "toolOutputs": [
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        }
+      ]
+    },
+    {
+      "route": "/v1/responses",
+      "model": "gpt-5.4",
+      "tools": [
+        {
+          "type": "function",
+          "name": "request_user_input"
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch"
+        }
+      ],
+      "toolOutputs": [
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        },
+        {
+          "denied": true,
+          "sandboxFailure": false,
+          "length": 91
+        }
+      ]
+    }
+  ]
+}

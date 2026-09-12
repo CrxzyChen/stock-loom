@@ -1,0 +1,8 @@
+import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';import electron from 'electron';
+const base=path.resolve('.runtime/tests');fs.mkdirSync(base,{recursive:true});const directory=fs.mkdtempSync(path.join(base,'market-ui-'));
+const python=path.resolve('.venv312/Scripts/python.exe');
+let result=spawnSync(python,[path.resolve('scripts/seed-market-ui.py'),directory],{stdio:'inherit',windowsHide:true});assert.equal(result.status,0);
+const code="import sys,json;sys.path.insert(0,'apps/data-service');from main import Store;s=Store(sys.argv[1]);c=s.prepare_research({'instrumentIds':['000001.SZ','000002.SZ'],'question':'合成测试：比较已保存的资料'});s.start_research({'runId':c['runId']});s.save_report({'runId':c['runId'],'model':'synthetic','threadId':'synthetic','usage':{'input_tokens':0,'output_tokens':0,'cached_input_tokens':0},'report':{'summary':'这份报告仅用于界面验收，未调用真实模型。','claims':[],'limitations':['合成资料，不用于投资判断。']}});s.close()";
+result=spawnSync(python,['-c',code,path.join(directory,'profiles/default')],{stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});assert.equal(result.status,0);
+result=spawnSync(electron,[path.resolve('scripts/probe-research-provenance-ui.cjs'),directory],{stdio:'inherit',windowsHide:true,timeout:40000});assert.equal(result.status,0);
+const record=JSON.parse(fs.readFileSync(path.join(directory,'result.json'),'utf8'));assert.equal(record.passed,true,record.error);fs.writeFileSync('validation/research-provenance-ui-probe.json',JSON.stringify({directory,...record},null,2));console.log(directory);

@@ -1,0 +1,51 @@
+const {app,ipcMain}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const directory=fs.mkdtempSync(path.resolve('.runtime/tests/central-split-ui-'));app.setPath('userData',directory);app.disableHardwareAcceleration();
+const evidence=JSON.parse(fs.readFileSync('validation/round2-history.json','utf8')),history=JSON.parse(fs.readFileSync(path.join(evidence.folder,'history.json'),'utf8'));
+const record={passed:false,directory,realDesktop:true,historySource:'native captured test conversation',liveModel:false,reads:[]};
+const handle=ipcMain.handle.bind(ipcMain);
+// Only the history RPC response is replayed; the real preload, renderer,
+// project initialization and persistence run unchanged in an isolated profile.
+ipcMain.handle=(channel,listener)=>handle(channel,channel==='stock:copilot:list'?async()=>({data:[history.thread],nextCursor:null}):channel==='stock:copilot:read'?async(_event,p)=>{
+ assert.equal(p.threadId,history.thread.id);record.reads.push(p.cursor);
+ return {...history,thread:{...history.thread,turns:p.cursor?history.thread.turns.slice(0,1):history.thread.turns.slice(-1)},historyNextCursor:p.cursor?null:'older-fixture'};
+}:listener);
+const timer=setTimeout(()=>{record.error='timeout';fs.writeFileSync('validation/central-split-ui.json',JSON.stringify(record,null,2));app.exit(1)},45000);let started=false;
+app.on('browser-window-created',(_,win)=>{if(started)return;started=true;win.webContents.once('did-finish-load',()=>void(async()=>{
+ const js=s=>win.webContents.executeJavaScript(s),wait=async s=>{for(let i=0;i<120;i++){if(await js(s))return;await new Promise(r=>setTimeout(r,100))}throw Error('UI wait: '+s)};
+ const click=async label=>{await wait(`Array.from(document.querySelectorAll('.copilot-panel button')).some(b=>b.textContent.trim()===${JSON.stringify(label)}&&!b.disabled)`);await js(`Array.from(document.querySelectorAll('.copilot-panel button')).find(b=>b.textContent.trim()===${JSON.stringify(label)}&&!b.disabled).click()`)};
+ await wait(`document.querySelector('.history-thread')!==null`);
+ await js(`(()=>{const b=Array.from(document.querySelectorAll('button')).find(x=>x.textContent.includes('展开 Codex'));if(b)b.click()})()`);
+ await js(`document.querySelector('.history-thread').click()`);
+ await wait(`document.querySelector('.copilot-messages').textContent.includes('48271')`);
+ await click('更早消息');await wait(`document.querySelector('.copilot-messages').textContent.includes('get_holdings')`);
+ assert.equal(await js(`document.querySelectorAll('.copilot-messages .userMessage').length`),2);record.paginationRendered=true;
+ await new Promise(resolve=>{win.webContents.once('did-finish-load',resolve);win.webContents.reload()});
+ await wait(`document.querySelector('.copilot-messages').textContent.includes('48271')`);
+ assert.ok(await js(`document.querySelector('.history-thread[aria-current=true]')!==null`));record.selectedConversationRestored=true;
+ await js(`(()=>{const t=document.querySelector('.copilot-panel textarea');t.value='我的未发送草稿';t.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+ await js(`document.querySelector('[aria-label="收起历史会话"]').click()`);
+ await wait(`document.querySelector('.copilot-history.collapsed')!==null`);
+ assert.equal(await js(`document.querySelector('.copilot-panel textarea').value`),'我的未发送草稿');
+ await new Promise(resolve=>{win.webContents.once('did-finish-load',resolve);win.webContents.reload()});
+ await wait(`document.querySelector('.copilot-history.collapsed')!==null`);
+ assert.equal(await js(`document.querySelector('.copilot-panel textarea').value`),'我的未发送草稿');
+ await js(`document.querySelector('[aria-label="展开历史会话"]').click()`);
+ await wait(`document.querySelector('.history-thread')!==null`);
+ record.collapseAndDraftPersisted=true;
+ win.setContentSize(1000,760);await new Promise(r=>setTimeout(r,200));
+ assert.ok(await js(`document.documentElement.scrollWidth<=innerWidth`));
+ assert.ok(await js(`document.querySelector('.copilot-conversation').getBoundingClientRect().width>=230`));record.narrowLayout=true;
+ win.setContentSize(1440,900);await new Promise(r=>setTimeout(r,200));
+ const bounds=await js(`(()=>{const r=document.querySelector('.inspector-resize').getBoundingClientRect();return {x:Math.round(r.x+4),y:Math.round(r.y+200)}})()`);
+ win.webContents.sendInputEvent({type:'mouseMove',...bounds});win.webContents.sendInputEvent({type:'mouseDown',...bounds,button:'left',clickCount:1});win.webContents.sendInputEvent({type:'mouseMove',x:bounds.x-180,y:bounds.y,movementX:-180});win.webContents.sendInputEvent({type:'mouseUp',x:bounds.x-180,y:bounds.y,button:'left',clickCount:1});
+ await wait(`document.querySelector('.copilot-conversation').getBoundingClientRect().width>600`);record.unrestrictedDrag=true;
+ const ratio=await js(`localStorage.getItem('stock.central-split.v1')`);assert.ok(Number(ratio)>.6);
+ await new Promise(resolve=>{win.webContents.once('did-finish-load',resolve);win.webContents.reload()});await wait(`document.querySelector('.copilot-conversation').getBoundingClientRect().width>600`);record.splitPersisted=true;
+ await js(`document.querySelector('.inspector-resize').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))`);
+ assert.ok(Number(await js(`localStorage.getItem('stock.central-split.v1')`))<Number(ratio));record.keyboardResize=true;
+ win.setContentSize(1000,760);await new Promise(r=>setTimeout(r,200));assert.equal(await js(`getComputedStyle(document.querySelector('.inspector')).position`),'relative');assert.ok(await js(`document.querySelector('.workarea').getBoundingClientRect().right<=document.querySelector('.inspector').getBoundingClientRect().left+1`));record.narrowSideBySide=true;
+ win.setContentSize(1440,900);await new Promise(r=>setTimeout(r,200));record.screenshot=path.join(directory,'history.png');fs.writeFileSync(record.screenshot,(await win.webContents.capturePage()).toPNG());
+ assert.ok(await js('document.documentElement.scrollWidth<=innerWidth'));assert.ok(await js(`document.querySelector('.copilot-history').getBoundingClientRect().left>=document.querySelector('.copilot-conversation').getBoundingClientRect().right-1`));record.historyOnRight=true;record.passed=true;
+ clearTimeout(timer);fs.writeFileSync('validation/central-split-ui.json',JSON.stringify(record,null,2));app.quit();
+})().catch(error=>{record.error=error.stack;clearTimeout(timer);fs.writeFileSync('validation/central-split-ui.json',JSON.stringify(record,null,2));app.exit(1)}));});
+require(path.resolve('dist/main/main.cjs'));

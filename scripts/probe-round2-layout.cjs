@@ -1,0 +1,24 @@
+const {app}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const directory=fs.mkdtempSync(path.resolve('.runtime/tests/round2-layout-'));app.setPath('userData',directory);app.disableHardwareAcceleration();
+const record={passed:false,directory,realDesktop:true};let started=false;const timer=setTimeout(()=>app.exit(1),45000);
+app.on('browser-window-created',(_,win)=>{if(started)return;started=true;win.webContents.once('did-finish-load',()=>void(async()=>{
+ const js=s=>win.webContents.executeJavaScript(s),wait=async s=>{for(let i=0;i<100;i++){if(await js(s))return;await new Promise(r=>setTimeout(r,100))}throw Error('UI wait: '+s)};
+ const key=async(selector,key)=>js(`document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key)},bubbles:true}))`);
+ const click=async selector=>{await wait(`document.querySelector(${JSON.stringify(selector)})!==null`);await js(`document.querySelector(${JSON.stringify(selector)}).click()`)};
+ win.setContentSize(1440,900);await wait(`document.querySelector('.context-resize')!==null`);
+ await key('.context-resize','End');await wait(`document.querySelector('.context').getBoundingClientRect().width===360`);
+ await click('[aria-controls="research-inspector"][aria-expanded]');await key('.inspector-resize','End');
+ await wait(`document.querySelector('.inspector').getBoundingClientRect().width===440`);assert.ok(await js(`document.querySelector('.workarea').getBoundingClientRect().width>=360`));record.keyboardResize=true;
+ await click('[aria-label="收起左侧面板"]');await wait(`getComputedStyle(document.querySelector('.context')).display==='none'`);assert.ok(await js(`document.activeElement.matches('.activity button.selected')`));
+ await click('.activity button');await wait(`document.querySelector('.context').getBoundingClientRect().width===360`);record.leftCollapseRestore=true;
+ await new Promise(resolve=>{win.webContents.once('did-finish-load',resolve);win.webContents.reload()});await wait(`document.querySelector('.inspector').getBoundingClientRect().width===440&&document.querySelector('.context').getBoundingClientRect().width===360`);record.widthPersistence=true;
+ const edge=await js(`(()=>{const r=document.querySelector('.context-resize').getBoundingClientRect();return {x:Math.round(r.x+3),y:Math.round(r.y+100)}})()`);
+ win.webContents.sendInputEvent({type:'mouseMove',...edge});win.webContents.sendInputEvent({type:'mouseDown',...edge,button:'left',clickCount:1});win.webContents.sendInputEvent({type:'mouseMove',x:edge.x-80,y:edge.y,movementX:-80});win.webContents.sendInputEvent({type:'mouseUp',x:edge.x-80,y:edge.y,button:'left',clickCount:1});await wait(`document.querySelector('.context').getBoundingClientRect().width===280`);record.pointerResize=true;
+ win.setContentSize(1000,760);await wait(`innerWidth===1000`);assert.ok(await js(`document.querySelector('.workarea').getBoundingClientRect().width>=360`));assert.equal(await js(`getComputedStyle(document.querySelector('.inspector')).position`),'fixed');
+ await click('[aria-label="收起 Codex"]');await wait(`getComputedStyle(document.querySelector('.inspector')).display==='none'`);assert.ok(await js(`document.activeElement.getAttribute('aria-controls')==='research-inspector'`));record.narrowAndFocus=true;
+ win.webContents.setZoomFactor(1.5);await wait('innerWidth<780');assert.ok(await js(`document.querySelector('.context').getBoundingClientRect().width>=160`));assert.ok(await js(`document.querySelector('.workarea').getBoundingClientRect().width>=359`));record.zoomKeepsLeftAccessible=true;
+ win.webContents.setZoomFactor(1);await wait('innerWidth===1000');
+ assert.ok(await js('document.documentElement.scrollWidth<=innerWidth'));record.screenshot=path.join(directory,'layout.png');fs.writeFileSync(record.screenshot,(await win.webContents.capturePage()).toPNG());
+ record.passed=true;clearTimeout(timer);fs.writeFileSync('validation/round2-layout.json',JSON.stringify(record,null,2));app.quit();
+})().catch(error=>{record.error=error.stack;clearTimeout(timer);fs.writeFileSync('validation/round2-layout.json',JSON.stringify(record,null,2));app.exit(1)}));});
+require(path.resolve('dist/main/main.cjs'));
