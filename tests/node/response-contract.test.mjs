@@ -6,7 +6,7 @@ test('Main rejects malformed mapped responses without exposing payload and accep
 });
 test('Python RPC rejects malformed output before serialization, then recovers for valid output',async()=>{
   const base=path.resolve('.runtime/tests');await fs.mkdir(base,{recursive:true});const root=await fs.mkdtemp(path.join(base,'response-contract-'));
-  const code="import sys;sys.path.insert(0,'apps/data-service');import main;old=main.Store.lists;state=[True]\ndef lists(self):\n if state[0]:\n  state[0]=False\n  return {'privateValue':'SYNTHETIC_PRIVATE_RESPONSE'}\n return old(self)\nmain.Store.lists=lists\nmain.serve(sys.argv[1])";
+  const code="import sys;sys.stdout.reconfigure(encoding='utf-8');sys.path.insert(0,'apps/data-service');import main;old=main.Store.lists;state=[True]\ndef lists(self):\n if state[0]:\n  state[0]=False\n  return {'privateValue':'SYNTHETIC_PRIVATE_RESPONSE'}\n return old(self)\nmain.Store.lists=lists\nmain.serve(sys.argv[1])";
   const service=new ServiceClient(path.resolve('.venv312/Scripts/python.exe'),['-c',code,root]);
   try{await service.start();let wire='';service.child.stdout.on('data',chunk=>{wire+=chunk});await assert.rejects(service.call('watchlists.list'),error=>error.message.startsWith('INVALID_RESPONSE:')&&!error.message.includes('PRIVATE'));assert.equal(JSON.parse(wire.trim()).error.code,'INVALID_RESPONSE');assert.ok(!wire.includes('SYNTHETIC_PRIVATE_RESPONSE'));assert.deepEqual(await service.call('watchlists.list'),[])}finally{await service.stop()}
 });
