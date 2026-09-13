@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';import {readBrowserTools,saveBrowserTools,browserToolOptions,browserToolsStatus} from '../../apps/desktop/src/main/browser-tools-settings.mjs';
 test('browser opt-in persists; disabled config never enables browser or creates output',async()=>{
 const directory=await fs.mkdtemp(path.resolve('.runtime/browser-settings-'));assert.equal(await readBrowserTools(directory),false);
-const options=await browserToolOptions({directory,project:directory,command:'node',entry:'missing'});assert.deepEqual(options.config,['mcp_servers.stock_browser.enabled=false']);await assert.rejects(fs.access(path.join(directory,'sources')));
+const options=await browserToolOptions({directory,project:directory,command:'node',entry:'missing'});assert.deepEqual(options.config,['mcp_servers.stock_browser.enabled=false','mcp_servers.stock_browser.command="node"','mcp_servers.stock_browser.args=["missing"]']);await assert.rejects(fs.access(path.join(directory,'sources')));
 await assert.rejects(saveBrowserTools(directory,'true'));await saveBrowserTools(directory,true);assert.equal(await readBrowserTools(directory),true);await saveBrowserTools(directory,false);assert.equal(await readBrowserTools(directory),false);
 });
 test('enabled browser uses project output and private profile; rejects linked output',async(t)=>{

@@ -16,7 +16,8 @@ export async function browserToolsStatus(directory,entry){
  return {enabled:await readBrowserTools(directory),available:await exists(entry),browserInstalled:(await Promise.all(edge.map(exists))).some(Boolean)};
 }
 export async function browserToolOptions({directory,project,command,entry}){
- if(!await readBrowserTools(directory))return {config:['mcp_servers.stock_browser.enabled=false'],env:{}};
+ // Codex validates the transport even for a disabled MCP server.
+ if(!await readBrowserTools(directory))return {config:['mcp_servers.stock_browser.enabled=false',`mcp_servers.stock_browser.command=${JSON.stringify(command)}`,`mcp_servers.stock_browser.args=${JSON.stringify([entry])}`],env:{}};
  const status=await browserToolsStatus(directory,entry);
  if(!status.available||!status.browserInstalled)throw Error('浏览器工具不可用，请在工具设置中检查 Microsoft Edge。');
  const key=createHash('sha256').update(project).digest('hex');
