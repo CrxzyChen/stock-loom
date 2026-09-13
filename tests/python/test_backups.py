@@ -7,6 +7,8 @@ import json
 import hashlib
 import sqlite3
 import errno
+import stat
+from types import SimpleNamespace
 from unittest.mock import patch
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[2]/'apps/data-service'))
 from main import Store
@@ -25,6 +27,36 @@ class BackupTests(unittest.TestCase):
         self.key={'runId':context['runId']};self.store.start_research(self.key)
         self.store.save_report({**self.key,'report':{'summary':'合成报告','claims':[],'limitations':['缺少数据']},'model':'fixture','threadId':'fixture','usage':{'input_tokens':1,'cached_input_tokens':0,'output_tokens':1}})
     def tearDown(self):self.store.close()
+    def test_windows_virtualized_regular_file_is_archived_by_logical_profile_path(self):
+        source=self.store.root/'runs'/self.key['runId']/'context.json'
+        original=pathlib.Path.resolve
+        def virtualized(file,*args,**kwargs):
+            if file==source:return self.store.root.parent/'virtual-cache'/'context.json'
+            return original(file,*args,**kwargs)
+        expected=source.read_bytes()
+        with patch.object(pathlib.Path,'resolve',virtualized):
+            archive=self.store.create_backup({})
+        with zipfile.ZipFile(archive['path']) as saved:
+            self.assertEqual(saved.read(source.relative_to(self.store.root).as_posix()),expected)
+    def test_referenced_file_symlink_is_rejected_without_archive(self):
+        source=self.store.root/'runs'/self.key['runId']/'context.json'
+        original=source.with_suffix('.original');source.rename(original)
+        try:source.symlink_to(original)
+        except OSError as error:
+            original.rename(source);self.skipTest(str(error))
+        before=set((self.store.root/'backups').iterdir())
+        with self.assertRaisesRegex(ProviderError,'备份来源'):
+            self.store.create_backup({})
+        self.assertEqual(before,set((self.store.root/'backups').iterdir()))
+    def test_windows_reparse_directory_is_rejected_before_archive(self):
+        folder=self.store.root/'runs'/self.key['runId']
+        original=pathlib.Path.lstat
+        def reparse(file,*args,**kwargs):
+            if file==folder:return SimpleNamespace(st_mode=stat.S_IFDIR,st_file_attributes=0x400)
+            return original(file,*args,**kwargs)
+        with patch.object(pathlib.Path,'lstat',reparse):
+            with self.assertRaisesRegex(ProviderError,'备份来源'):
+                self.store.create_backup({})
     def test_renamed_group_order_and_delisted_member_restore_from_frozen_backup(self):
         with self.store.db:self.store.db.execute("INSERT INTO instruments(id,name,exchange,list_status) VALUES ('000002.SZ','SYNTHETIC DELISTED','SZSE','D')")
         self.store.change_member({'listId':self.group['id'],'instrumentId':'000002.SZ'},True)

@@ -1,11 +1,12 @@
 """Compare durable user data against the offline upgrade backup; output no contents."""
 import hashlib,json,os,pathlib,sqlite3,sys
 root=pathlib.Path(__file__).resolve().parents[1]
-before=json.loads((root/'validation/round4-upgrade-preservation-before.json').read_text())
+stage=sys.argv[1] if len(sys.argv)>1 else 'after'
+if stage not in ('manual-a','manual-a4','after'):raise ValueError('Unknown verification stage')
+baseline='before' if stage=='manual-a' else 'before-a4'
+before=json.loads((root/f'validation/round4-upgrade-preservation-{baseline}.json').read_text(encoding='utf-8'))
 backup=pathlib.Path(before['backup'])
 source=pathlib.Path(os.environ['APPDATA'])/'stock-workshop'
-stage=sys.argv[1] if len(sys.argv)>1 else 'after'
-if stage not in ('manual-a','after'):raise ValueError('Unknown verification stage')
 binding=json.loads((source/'project-data.json').read_text(encoding='utf-8'))
 profile=pathlib.Path(next(b['profile'] for b in binding['bindings'] if b['project']==binding['activeProject']))
 db=sqlite3.connect((profile/'stock.sqlite').as_uri()+'?mode=ro&immutable=1',uri=True)
@@ -36,7 +37,7 @@ for name in ('project-data.json','research-auth-mode.json','scheduler.json','cop
 record={'stage':stage,'offlineComparison':True,'integrity':integrity,'tables':tables,'trees':trees,'configurationFiles':files}
 if stage=='after':
     live=json.loads((root/'validation/round4-installed-after.json').read_text(encoding='utf-8'))
-    record['layoutSemanticsPreserved']=live.get('layoutPreserved') is True and live.get('version')=='0.2.0-beta.3'
+    record['layoutSemanticsPreserved']=live.get('layoutPreserved') is True and live.get('version')=='0.2.0-beta.5'
     record['accountUsable']=live.get('observed',{}).get('usageState')=='ready'
     # Chromium rewrites LevelDB files during normal startup. Compare actual saved
     # layout values through the installed renderer rather than these storage files.

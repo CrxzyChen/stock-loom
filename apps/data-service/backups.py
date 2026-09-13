@@ -7,6 +7,7 @@ import os
 import pathlib
 import re
 import sqlite3
+import stat
 import uuid
 import zipfile
 from provider import ProviderError
@@ -66,11 +67,22 @@ class Backups:
         for row in self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset LIKE 'reference:%'"):
             self.checked_reference(row)
         def add(file):
-            resolved=file.resolve()
-            if not resolved.is_relative_to(self.root) or not resolved.is_file():raise ProviderError('BACKUP_SOURCE','备份来源文件缺失或越界。')
-            name=file.relative_to(self.root).as_posix()
+            try:relative=file.relative_to(self.root)
+            except ValueError:raise ProviderError('BACKUP_SOURCE','备份来源文件缺失或越界。') from None
+            name=relative.as_posix()
             if not safe_name(name):raise ProviderError('BACKUP_SOURCE','备份来源路径不受支持。')
-            sources[name]=resolved
+            # Packaged Windows hosts can map individual AppData files to their
+            # private cache without a filesystem link. Keep the selected profile's
+            # logical path, but reject links/reparse points in every child component.
+            current=self.root
+            try:
+                for index,part in enumerate(relative.parts):
+                    current=current/part;metadata=current.lstat()
+                    if stat.S_ISLNK(metadata.st_mode) or getattr(metadata,'st_file_attributes',0)&getattr(stat,'FILE_ATTRIBUTE_REPARSE_POINT',0x400):raise ValueError()
+                    expected=stat.S_ISREG if index==len(relative.parts)-1 else stat.S_ISDIR
+                    if not expected(metadata.st_mode):raise ValueError()
+            except (OSError,ValueError):raise ProviderError('BACKUP_SOURCE','备份来源文件缺失或越界。') from None
+            sources[name]=file
         bundles={}
         for row in self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset LIKE 'daily:%'"):
             manifest=json.loads(row['manifest'])

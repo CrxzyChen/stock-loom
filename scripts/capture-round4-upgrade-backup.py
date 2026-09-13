@@ -1,6 +1,8 @@
 """Offline app-owned backup before a manual upgrade. Run only after app exit."""
-import hashlib,json,os,pathlib,shutil,sqlite3,tempfile
+import hashlib,json,os,pathlib,shutil,sqlite3,tempfile,sys
 root=pathlib.Path(__file__).resolve().parents[1]
+stage=sys.argv[1] if len(sys.argv)>1 else 'before'
+if stage not in ('before','before-a4'):raise ValueError('Unknown backup stage')
 source=pathlib.Path(os.environ['APPDATA'])/'stock-workshop'
 output=pathlib.Path(tempfile.mkdtemp(prefix='upgrade-preservation-',dir=root/'.runtime'))
 excluded={'Cache','Code Cache','GPUCache','DawnGraphiteCache','DawnWebGPUCache','blob_storage','Shared Dictionary'}
@@ -38,5 +40,5 @@ def summary(folder):
     return {'files':files,'bytes':size,'sha256':digest.hexdigest()}
 record={'complete':True,'backup':str(output),'privateLocalBackup':True,'sourceAppClosedRequired':True,'tables':tables,
         'project':summary(output/'active-project'),'appData':summary(output/'app-data'),'credentials':'App-owned encrypted files included; OS keyring not exported'}
-(root/'validation/round4-upgrade-preservation-before.json').write_text(json.dumps(record,indent=2)+'\n',encoding='utf-8')
+(root/f'validation/round4-upgrade-preservation-{stage}.json').write_text(json.dumps(record,indent=2)+'\n',encoding='utf-8')
 print(json.dumps({'complete':True,'backup':str(output),'appFiles':record['appData']['files'],'appBytes':record['appData']['bytes'],'projectFiles':record['project']['files'],'tables':list(tables)}))

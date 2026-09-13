@@ -28,6 +28,10 @@ test('quit request prevents launch; failed recovery is explicit',async()=>{
   const {calls,options}=fixture();options.canLaunch=()=>false;options.restart=async()=>{throw Error('private')};
   const result=await installUpdate(options);assert.equal(result.launched,false);assert.match(result.message,/服务未恢复/);assert.ok(!calls.includes('launch'));
 });
+test('backup failure names the stage without claiming a backup was created',async()=>{
+  const {options}=fixture('backup');const result=await installUpdate(options);
+  assert.match(result.message,/升级前备份未完成/);assert.ok(!result.message.includes('备份会保留'));
+});
 test('candidate recheck rejects changed bytes, outside paths and invalid signatures',async()=>{
   const base=path.resolve('.runtime/tests');await fs.mkdir(base,{recursive:true});const directory=await fs.mkdtemp(path.join(base,'install-candidate-'));
   const data=Buffer.from('synthetic non executable');const file=path.join(directory,'Stock-Loom-0.2.0-x64.exe');await fs.writeFile(file,data);

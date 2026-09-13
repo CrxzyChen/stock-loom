@@ -36,18 +36,18 @@ export function launchInstaller(file){
 
 // Dependencies make failure ordering testable without executing an installer.
 export async function installUpdate({validate,quiesce,backup,stop,restart,launch,canLaunch,onStage=()=>{}}){
-  let stopped=false;
+  let stopped=false,backedUp=false,stage='安装包复核';
   try{
     onStage('正在重新核对安装包和发布签名');await validate();
-    onStage('正在停止研究与数据任务');await quiesce();
-    onStage('正在创建升级前备份');await backup();
-    onStage('正在等待本地服务退出');stopped=true;await stop();
-    onStage('正在进行安装前最终核验');const file=await validate();
+    stage='停止研究与数据任务';onStage('正在停止研究与数据任务');await quiesce();
+    stage='升级前备份';onStage('正在创建升级前备份');await backup();backedUp=true;
+    stage='本地服务退出';onStage('正在等待本地服务退出');stopped=true;await stop();
+    stage='安装前最终核验';onStage('正在进行安装前最终核验');const file=await validate();
     if(!canLaunch())throw Error('应用退出已取消安装');
-    await launch(file);return {launched:true};
+    stage='安装器启动';await launch(file);return {launched:true};
   }catch{
     let recovered=true;
     if(stopped)try{await restart()}catch{recovered=false}
-    return {launched:false,message:recovered?'安装未启动；请重新检查更新。已有备份将保留。':'安装未启动，且本地服务未恢复；请重新启动应用。已有备份将保留。'};
+    return {launched:false,message:`${stage}未完成，安装器未启动。${recovered?'请检查后重试。':'本地服务未恢复，请重新启动应用。'}${backedUp?'已创建的备份会保留。':''}`};
   }
 }
