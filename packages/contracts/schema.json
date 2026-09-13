@@ -7113,7 +7113,14 @@
           "const": "CNY"
         },
         "cash": {
-          "type": "null"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -7479,6 +7486,387 @@
         "missingPriceCount",
         "pricedHoldingsPercent"
       ]
+    },
+    "LedgerImportMapping": {
+      "type": "object",
+      "properties": {
+        "tradeId": {
+          "type": "string"
+        },
+        "instrumentId": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "price": {
+          "type": "string"
+        },
+        "fee": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tradeId",
+        "instrumentId",
+        "date",
+        "kind",
+        "quantity",
+        "price",
+        "fee"
+      ],
+      "additionalProperties": false
+    },
+    "LedgerImportRequest": {
+      "type": "object",
+      "properties": {
+        "csv": {
+          "type": "string"
+        },
+        "mapping": {
+          "$ref": "#/$defs/LedgerImportMapping"
+        },
+        "account": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "boolean"
+        },
+        "previewToken": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "csv",
+        "mapping",
+        "account",
+        "commit",
+        "previewToken"
+      ],
+      "additionalProperties": false
+    },
+    "LedgerImportRow": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tradeId": {
+          "type": "string"
+        },
+        "instrumentId": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "duplicate",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "price": {
+          "type": "string"
+        },
+        "fee": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "line",
+        "tradeId",
+        "instrumentId",
+        "status",
+        "message",
+        "date",
+        "kind",
+        "quantity",
+        "price",
+        "fee"
+      ],
+      "additionalProperties": false
+    },
+    "LedgerImportResult": {
+      "type": "object",
+      "properties": {
+        "previewToken": {
+          "type": "string"
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ready": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LedgerImportRow"
+          },
+          "maxItems": 1000
+        }
+      },
+      "required": [
+        "previewToken",
+        "committed",
+        "errors",
+        "ready",
+        "duplicates",
+        "rows"
+      ],
+      "additionalProperties": false
+    },
+    "CashEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "balance",
+            "deposit",
+            "withdrawal",
+            "fee"
+          ]
+        },
+        "date": {
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "date",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    "CashWriteRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "event": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CashEvent"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "voided": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "requestId",
+        "revision",
+        "event",
+        "supersedes",
+        "voided"
+      ],
+      "additionalProperties": false
+    },
+    "CashWriteResult": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "eventId",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "CashRecord": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "event": {
+          "$ref": "#/$defs/CashEvent"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "voided": {
+          "type": "boolean"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "event",
+        "supersedes",
+        "voided",
+        "active",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "CashState": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "state": {
+          "enum": [
+            "ready",
+            "missingBalance",
+            "unreconciledPosition"
+          ]
+        },
+        "balanceDate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "balance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deposits": {
+          "type": "string"
+        },
+        "withdrawals": {
+          "type": "string"
+        },
+        "fees": {
+          "type": "string"
+        },
+        "tradeNet": {
+          "type": "string"
+        },
+        "totalAssets": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "positionAdjustments": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CashRecord"
+          },
+          "maxItems": 200
+        },
+        "hasOlder": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "revision",
+        "state",
+        "balanceDate",
+        "balance",
+        "deposits",
+        "withdrawals",
+        "fees",
+        "tradeNet",
+        "totalAssets",
+        "positionAdjustments",
+        "events",
+        "hasOlder"
+      ],
+      "additionalProperties": false
     }
   },
   "x-rpc-responses": {
@@ -7580,7 +7968,10 @@
     "ledger.write": "LedgerWriteResult",
     "reference.catalog": "ReferenceCatalog",
     "reference.read": "ReferencePage",
-    "reference.sync": "ReferenceSyncResult"
+    "reference.sync": "ReferenceSyncResult",
+    "ledger.import": "LedgerImportResult",
+    "cash.read": "CashState",
+    "cash.write": "CashWriteResult"
   },
   "x-rpc-requests": {
     "settings.save": "Settings",
@@ -7681,6 +8072,9 @@
     "ledger.write": "LedgerWriteRequest",
     "reference.catalog": "NoParams",
     "reference.read": "ReferenceReadRequest",
-    "reference.sync": "ReferenceSyncRequest"
+    "reference.sync": "ReferenceSyncRequest",
+    "ledger.import": "LedgerImportRequest",
+    "cash.read": "NoParams",
+    "cash.write": "CashWriteRequest"
   }
 }

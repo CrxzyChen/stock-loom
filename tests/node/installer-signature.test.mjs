@@ -10,3 +10,11 @@ test('publisher verification requires valid current and candidate signatures wit
 test('signature API failure never grants trust',async()=>{
   await assert.rejects(verifyInstallerPublisher('candidate','current',{inspect:async()=>{throw Error('OS verification failed')}}));
 });
+
+const unsigned={status:'NotSigned',subject:null,certificateSha256:null};
+test('explicit manifest policy accepts only unsigned-to-unsigned installs',async()=>{
+ for(const [candidate,current,expected] of [[unsigned,unsigned,true],[{...unsigned,status:'HashMismatch'},unsigned,false],[{...unsigned,status:'UnknownError'},unsigned,false],[unsigned,valid,false],[valid,unsigned,false],[{...unsigned,certificateSha256:'b'.repeat(64)},unsigned,false]]){
+  const result=await verifyInstallerPublisher('candidate','current',{allowUnsigned:true,inspect:async file=>file==='candidate'?candidate:current});assert.equal(result.verified,expected);
+ }
+ assert.equal((await verifyInstallerPublisher('candidate','current',{inspect:async()=>unsigned})).verified,false);
+});

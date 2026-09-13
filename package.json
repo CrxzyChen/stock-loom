@@ -1,6 +1,6 @@
 {
   "name": "stock-workshop",
-  "version": "0.1.0-beta.1",
+  "version": "0.2.0-beta.2",
   "private": true,
   "description": "Stock Loom · 观市 — local-first A-share workspace with Codex Copilot",
   "author": "CrxzyChen",
@@ -25,12 +25,17 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "@openai/codex-sdk": "0.154.0",
+    "@playwright/mcp": "0.0.80",
     "cron-parser": "5.10.0",
+    "exceljs": "4.4.0",
     "markdown-it": "15.0.2",
+    "papaparse": "5.7.0",
+    "pdfjs-dist": "5.3.93",
     "vue": "3.5.42",
     "zod": "4.6.2"
   },
   "devDependencies": {
+    "@types/papaparse": "5.5.2",
     "@vitejs/plugin-vue": "6.0.8",
     "electron": "44.3.0",
     "electron-builder": "26.15.3",
@@ -69,6 +74,18 @@
       {
         "from": "dist/tools",
         "to": "tools"
+      },
+      {
+        "from": "node_modules/@playwright/mcp",
+        "to": "browser/node_modules/@playwright/mcp"
+      },
+      {
+        "from": "node_modules/playwright",
+        "to": "browser/node_modules/playwright"
+      },
+      {
+        "from": "node_modules/playwright-core",
+        "to": "browser/node_modules/playwright-core"
       }
     ],
     "asar": true,
@@ -87,7 +104,8 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "include": "scripts/installer-running-check.nsh"
     },
     "artifactName": "Stock-Loom-${version}-${arch}.${ext}"
   },

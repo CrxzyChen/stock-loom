@@ -57,5 +57,16 @@ export class DesktopPresence{
     }catch{/* The task has already persisted its outcome. */}
   }
   clearNotifications(){for(const item of this.notices)try{item.close()}catch{}this.notices.clear()}
+  notifyScheduled({title,body,onClick}){
+    if(this.exiting)return false;
+    try{
+      if(!this.Notification.isSupported())return false;
+      const item=new this.Notification({title,body,silent:true});this.notices.add(item);
+      const release=()=>this.notices.delete(item);
+      item.on('click',()=>{this.show();release();try{Promise.resolve(onClick?.()).catch(()=>{})}catch{}});item.on('close',release);item.on('failed',release);item.show();
+      if(this.notices.size>8){const first=this.notices.values().next().value;try{first.close()}catch{}this.notices.delete(first)}
+      return true;
+    }catch{return false}
+  }
   shutdown(){this.exiting=true;this.enabled=false;this.tray?.destroy();this.tray=null;this.clearNotifications()}
 }

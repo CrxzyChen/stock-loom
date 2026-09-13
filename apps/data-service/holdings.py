@@ -82,7 +82,7 @@ class Holdings:
         industries=[{**g,'marketValue':money(g['marketValue']),'pricedHoldingsPercent':money(g['marketValue']/total*100) if total>0 else None} for g in groups.values()]
         industries.sort(key=lambda g:(-Decimal(g['marketValue']),g['name']))
         dates=sorted({row['priceDate'] for row in items if row['status']=='valued'})
-        return {'account':{'id':'manual','name':'项目手动持仓','currency':'CNY','cash':None},'items':items,
+        return {'account':{'id':'manual','name':'项目手动持仓','currency':'CNY','cash':self.cash_state({})['balance'] if self.db.execute('PRAGMA user_version').fetchone()[0]>=10 else None},'items':items,
                 'costBasis':None if unknown_cost else money(sum(costs,Decimal(0))),
                 'knownCostBasis':money(sum(costs,Decimal(0))),'unknownCostCount':unknown_cost,
                 'realizedProfit':None if unknown_realized else money(sum(realized,Decimal(0))),
@@ -112,7 +112,7 @@ class Holdings:
         except ValueError: raise ProviderError('INVALID_PARAMS','持仓日期无效。') from None
         if not self.db.execute('SELECT 1 FROM instruments WHERE id=?',(code,)).fetchone():
             raise ProviderError('INSTRUMENT_NOT_FOUND','请先选择目录中的股票。')
-        if self.db.execute('PRAGMA user_version').fetchone()[0]==9:
+        if self.db.execute('PRAGMA user_version').fetchone()[0]>=9:
             return self.ledger_adjust_summary(p)
         with self.db:
             current=self.db.execute('SELECT revision FROM holdings WHERE instrument_id=?',(code,)).fetchone()

@@ -14,6 +14,8 @@ from catalog import Catalog
 from watchlists import Watchlists
 from holdings import Holdings, migrate_holdings
 from position_ledger import PositionLedger, migrate_position_ledger
+from ledger_import import LedgerImport
+from cash_ledger import CashLedger, migrate_cash_ledger
 from bars import Bars
 from financials import Financials
 from index_data import IndexData
@@ -39,7 +41,8 @@ from job_schema import migrate_job_ledger
 from generated_contracts import CONTRACT_FINGERPRINT, Overview, Settings, Watchlist, matches_contract, matches_rpc_response, matches_rpc_request
 
 PROTOCOL_VERSION = 2
-MAX_REQUEST = 262144
+# A bounded CSV batch may be 1 MiB before JSON escaping.
+MAX_REQUEST = 4 * 1024 * 1024
 
 
 class DomainError(Exception):
@@ -47,7 +50,7 @@ class DomainError(Exception):
         self.code, self.message = code, message
 
 
-class Store(ReferenceData, PositionLedger, AnnouncementData, SectorData, BreadthData, DemandData, Catalog, Watchlists, Holdings, Bars, Financials, IndexData, MarketData, Jobs, Screening, Research, ResearchCharts, Backups, Recap, RecapBudget, RecapModel, AutoSync, ScreenPreparation, BundleConversion):
+class Store(CashLedger, LedgerImport, ReferenceData, PositionLedger, AnnouncementData, SectorData, BreadthData, DemandData, Catalog, Watchlists, Holdings, Bars, Financials, IndexData, MarketData, Jobs, Screening, Research, ResearchCharts, Backups, Recap, RecapBudget, RecapModel, AutoSync, ScreenPreparation, BundleConversion):
     def __init__(self, root, budget_root=None):
         self.root = pathlib.Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
@@ -140,6 +143,7 @@ class Store(ReferenceData, PositionLedger, AnnouncementData, SectorData, Breadth
         if version < 7:migrate_job_ledger(self.db,self.root)
         if version < 8:migrate_holdings(self.db,self.root)
         if version < 9:migrate_position_ledger(self.db,self.root)
+        if version < 10:migrate_cash_ledger(self.db,self.root)
         self.db.execute('CREATE INDEX IF NOT EXISTS snapshots_dataset ON snapshots(dataset)')
         self.db.execute('INSERT OR IGNORE INTO settings VALUES (?, ?)', ('preferences', json.dumps({'colorMode': 'red-up', 'closeToTray': False})))
         self.db.commit()
@@ -267,6 +271,9 @@ class Store(ReferenceData, PositionLedger, AnnouncementData, SectorData, Breadth
         if method=='jobs.cancelAll':return self.cancel_all_jobs(params)
         if method == 'ledger.read': return self.ledger_read(params)
         if method == 'ledger.write': return self.ledger_write(params)
+        if method == 'ledger.import': return self.ledger_import(params)
+        if method == 'cash.read': return self.cash_read(params)
+        if method == 'cash.write': return self.cash_write(params)
         if method == 'reference.catalog': return catalogue()
         if method == 'reference.read': return self.read_reference(params)
         if method == 'reference.sync': return self.sync_reference(params)

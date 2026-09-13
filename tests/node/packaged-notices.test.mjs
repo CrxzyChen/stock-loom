@@ -19,3 +19,13 @@ test('packaged notices validate exact bytes and reject mismatches or unlisted bi
   root=fixture();const file=path.join(root,'notices/inventory.json');const data=JSON.parse(fs.readFileSync(file));data.items[0].files[0].file='../outside.txt';fs.writeFileSync(file,JSON.stringify(data));assert.throws(()=>verifyPackagedNotices(root));
   root=fixture();const native=path.join(root,'notices/native-runtime.json');const list=JSON.parse(fs.readFileSync(native));list.files.push({...list.files[0]});fs.writeFileSync(native,JSON.stringify(list));assert.throws(()=>verifyPackagedNotices(root),/Duplicate/);
 });
+test('native provenance rejects absolute workstation paths',()=>{
+  const root=fixture(),file=path.join(root,'notices/native-runtime.json');
+  const data=JSON.parse(fs.readFileSync(file));
+  data.files[0].byteIdenticalLocalOrigins=['python-runtime/DLLs/example.dll'];
+  fs.writeFileSync(file,JSON.stringify(data));assert.equal(verifyPackagedNotices(root).nativeFiles,1);
+  for(const origin of ['C:\\Users\\example\\example.dll','/home/example.dll','python-runtime/../private.dll']){
+    data.files[0].byteIdenticalLocalOrigins=[origin];fs.writeFileSync(file,JSON.stringify(data));
+    assert.throws(()=>verifyPackagedNotices(root),/invalid local origin/);
+  }
+});

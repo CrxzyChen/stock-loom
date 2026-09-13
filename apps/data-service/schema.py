@@ -1,3 +1,3 @@
-"""Version 9 adds the manual position ledger and auditable balance adjustments."""
-SCHEMA_VERSION = 9
-RESTORABLE_SCHEMAS = (5, 6, 7, 8, 9)
+"""Version 10 adds auditable cash flows; old services must not write this profile."""
+SCHEMA_VERSION = 10
+RESTORABLE_SCHEMAS = (5, 6, 7, 8, 9, 10)

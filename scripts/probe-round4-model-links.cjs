@@ -1,0 +1,26 @@
+const {app,ipcMain}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const evidence=JSON.parse(fs.readFileSync('validation/round4-model-browser.json','utf8'));assert.equal(evidence.passed,true);const directory=fs.mkdtempSync(path.resolve('.runtime/model-links-')),project=path.join(directory,'stock-project/workspace');
+fs.cpSync(evidence.project,project,{recursive:true,errorOnExist:true});
+app.setPath('userData',directory);app.disableHardwareAcceleration();
+const thread={id:'replayed-real-research',name:'真实研究回答回放',cwd:project,status:{type:'idle'},turns:evidence.turns.map((t,n)=>({id:String(n),status:t.status,items:t.items}))};
+const record={passed:false,realDesktop:true,replayedRealConversation:true,liveModelTurnsInThisProbe:0,sourceModelTurns:2,external:[]};
+const handle=ipcMain.handle.bind(ipcMain);
+ipcMain.handle=(channel,listener)=>handle(channel,channel==='stock:copilot:list'?async()=>({data:[thread],nextCursor:null}):channel==='stock:copilot:read'?async()=>({thread,pendingRequests:[],historyNextCursor:null}):channel==='stock:copilot:goal'?async()=>({goal:null}):channel==='stock:copilot:models'?async()=>({data:[]}):channel==='stock:external-link'?async(_,url)=>{record.external.push(url)}:listener);
+let started=false;const timer=setTimeout(()=>finish(Error('timeout')),45000);
+function finish(error){clearTimeout(timer);if(error)record.error=error.stack;else record.passed=true;fs.writeFileSync('validation/round4-model-links.json',JSON.stringify(record,null,2));app.exit(error?1:0)}
+app.on('browser-window-created',(_,win)=>{if(started)return;started=true;win.webContents.once('did-finish-load',()=>void(async()=>{
+ const js=s=>win.webContents.executeJavaScript(s),wait=async s=>{for(let i=0;i<160;i++){if(await js(`Boolean(${s})`))return;await new Promise(r=>setTimeout(r,100))}throw Error('Wait: '+s)};
+ await wait(`document.querySelector('.history-thread')`);await js(`document.querySelector('.quick-layout button[title="并排"]').click()`);await wait(`document.querySelector('.copilot-messages')?.getClientRects().length`);await js(`document.querySelector('.history-thread').click()`);
+ await wait(`document.querySelector('.copilot-messages a[data-project-file]')`);
+ const tabs=await js(`document.querySelectorAll('[role=tab]').length`);await new Promise(r=>setTimeout(r,200));assert.equal(await js(`document.querySelectorAll('[role=tab]').length`),tabs);record.noAutomaticOpen=true;
+ const click=label=>js(`Array.from(document.querySelectorAll('.copilot-messages a')).find(a=>a.textContent===${JSON.stringify(label)}).click()`);
+ await js("document.querySelector('.copilot-messages a[data-project-file][data-project-file$=\"002403-source.md\"]').click()");
+ await wait("Array.from(document.querySelectorAll('.project-markdown')).filter(e=>e.getClientRects().length).some(e=>e.textContent.includes('2025年年度报告'))");record.opensActualSource=true;
+ await js("document.querySelector('.copilot-messages a[data-project-file][data-project-file$=\"002403-review.md\"]').click()");
+ await wait("Array.from(document.querySelectorAll('.project-markdown')).filter(e=>e.getClientRects().length).some(e=>e.textContent.includes('002403.SZ'))");record.opensActualNote=true;
+ await js("Array.from(document.querySelectorAll('.project-markdown a[data-project-file]')).find(e=>e.getClientRects().length).click()");
+ await wait("Array.from(document.querySelectorAll('.project-markdown')).filter(e=>e.getClientRects().length).some(e=>e.textContent.includes('实际读到的页面事实'))");record.noteLinksBackToSource=true;
+ await new Promise(r=>setTimeout(r,600));
+ record.screenshot=path.join(directory,'links.png');fs.writeFileSync(record.screenshot,(await win.webContents.capturePage()).toPNG());finish();
+ })().catch(finish))});
+require(path.resolve('dist/main/main.cjs'));

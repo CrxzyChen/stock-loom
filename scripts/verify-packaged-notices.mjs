@@ -28,6 +28,9 @@ export function verifyPackagedNotices(resources){
   if(hash(ordinary(service,'stock-data.exe'))!==native.serviceSha256)throw Error('Native inventory belongs to another service');
   const expected=new Set();
   for(const item of native.files){
+    for(const origin of item.byteIdenticalLocalOrigins??[]){
+      if(typeof origin!=='string'||! /^(python-runtime|python-environment)\//.test(origin)||origin.includes('\\')||origin.includes(':')||origin.split('/').some(part=>!part||part==='.'||part==='..'))throw Error('Native inventory exposes an invalid local origin');
+    }
     if(expected.has(item.file.toLowerCase()))throw Error('Duplicate native inventory entry');
     expected.add(item.file.toLowerCase());
     const file=ordinary(service,item.file);

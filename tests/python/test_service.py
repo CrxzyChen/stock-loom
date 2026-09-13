@@ -92,7 +92,7 @@ class ProtocolTests(unittest.TestCase):
         root.mkdir(parents=True, exist_ok=True)
         directory = tempfile.mkdtemp(prefix='oversize-', dir=root)
         result = subprocess.run([sys.executable, str(ROOT / 'apps/data-service/main.py'), '--data-dir', directory],
-                                input='x' * 270000 + '\n', text=True, encoding='utf-8', capture_output=True, timeout=10)
+                                input='x' * (service.MAX_REQUEST+1) + '\n'+json.dumps({'requestId':'tail','method':'overview','params':{}})+'\n', text=True, encoding='utf-8', capture_output=True, timeout=10)
         self.assertEqual(len(result.stdout.splitlines()), 1)
         self.assertEqual(json.loads(result.stdout)['error']['code'], 'REQUEST_TOO_LARGE')
 

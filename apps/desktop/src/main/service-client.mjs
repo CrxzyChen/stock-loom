@@ -45,7 +45,7 @@ export class ServiceClient extends EventEmitter {
             else if(!matchesRpcResponse(pending.method,response.result))pending.reject(new ServiceRpcError('INVALID_RESPONSE','本地服务返回格式不正确，请检查应用版本和资料完整性。',response.requestId));
             else {
               pending.resolve(pending.withMetadata?response:response.result);
-              if(pending.method==='ledger.write')this.emit('dataChanged','holdings');
+              if(['ledger.write','cash.write'].includes(pending.method)||pending.method==='ledger.import'&&response.result?.committed)this.emit('dataChanged','holdings');
               if(['holdings.save','watchlists.create','watchlists.rename','watchlists.add','watchlists.remove','watchlists.reorder'].includes(pending.method))this.emit('dataChanged',pending.method.split('.')[0]);
             }
         }catch{this.failPending('数据服务协议响应不正确');child.kill();return}
@@ -81,7 +81,7 @@ export class ServiceClient extends EventEmitter {
     if(this.stopping||!this.child||(!starting&&this.status.state!=='ready'))return Promise.reject(new Error('本地服务尚未就绪，请稍后重试。'));
     if(this.pending.size>=32)return Promise.reject(new Error('请求过多，请稍后重试。'));
     const id=randomUUID(),message=JSON.stringify({requestId:id,protocolVersion:2,method,params})+'\n';
-    if(Buffer.byteLength(message)>262144)return Promise.reject(new Error('请求超过大小限制。'));
+    if(Buffer.byteLength(message)>(method==='ledger.import'?4*1024*1024:262144))return Promise.reject(new Error('请求超过大小限制。'));
     return new Promise((resolve,reject)=>{
       // Archive writes cannot be cancelled by abandoning their RPC response.
       // Keep maintenance locked until a response or confirmed process failure.

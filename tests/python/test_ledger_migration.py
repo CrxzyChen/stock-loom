@@ -6,7 +6,7 @@ from position_ledger import migrate_position_ledger
 class LedgerMigrationTests(unittest.TestCase):
  def setUp(self):
   root=pathlib.Path(__file__).resolve().parents[2]/'.runtime/tests';root.mkdir(parents=True,exist_ok=True)
-  with patch('main.migrate_position_ledger',lambda *a:None):self.s=Store(tempfile.mkdtemp(prefix='ledger-migrate-',dir=root))
+  with patch('main.migrate_position_ledger',lambda *a:None),patch('main.migrate_cash_ledger',lambda *a:None):self.s=Store(tempfile.mkdtemp(prefix='ledger-migrate-',dir=root))
   for code,quantity,cost in [('000001.SZ',100,'10.1234'),('000002.SZ',200,None),('000003.SZ',0,None)]:
    self.s.db.execute('INSERT INTO instruments(id,name,exchange,list_status) VALUES (?,?,?,?)',(code,code,'SZSE','L'))
    self.s.db.commit();self.s.holdings_save(dict(instrumentId=code,quantity=quantity,costPrice=cost,asOf='2024-01-01',revision=0))

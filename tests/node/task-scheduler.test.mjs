@@ -1,6 +1,19 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';
 import {TaskScheduler,scheduleSlot,validateTask} from '../../apps/desktop/src/main/task-scheduler.mjs';
 const task={name:'收盘检查',prompt:'检查自选股',frequency:'weekdays',time:'15:30',timezone:'Asia/Shanghai',enabled:true,permissionMode:'ask'};
+test('important notifications respect opt-in, current run, persistent dedup and failure isolation',async()=>{
+ const root=await fs.mkdtemp(path.resolve('.runtime/tests/notices-'));let count=0,project='a';const options={file:path.join(root,'tasks.json'),project:async()=>project,canRun:()=>true,run:async(t,started)=>started('thread'),notify:()=>{count++;return true}};
+ const s=new TaskScheduler(options);await s.initialize();try{assert.equal((await s.notifyCurrent({key:'event',message:'changed'})).status,'noActiveTask');let saved=await s.save(task);await s.runNow(saved.id);assert.equal((await s.notifyCurrent({key:'event',message:'changed'})).status,'muted');saved=await s.save({...task,id:saved.id,notifyEnabled:true});assert.equal((await s.notifyCurrent({key:'event',message:'changed'})).status,'submitted');assert.equal((await s.notifyCurrent({key:'event',message:'changed'})).status,'duplicate');assert.equal(count,1);project='b';assert.equal((await s.notifyCurrent({key:'event2',message:'changed'})).status,'noActiveTask');project='a';await s.stop();
+ const restart=new TaskScheduler(options);await restart.initialize();try{await restart.runNow(saved.id);assert.equal((await restart.notifyCurrent({key:'event',message:'changed'})).status,'duplicate');assert.equal(count,1);restart.notify=()=>{throw Error('OS failure')};assert.equal((await restart.notifyCurrent({key:'event2',message:'changed'})).status,'unavailable');assert.equal((await restart.list()).runs[0].status,'running')}finally{await restart.stop()}
+ }finally{await s.stop()}
+});
+test('resume and network recovery claim missed slots once without flooding even when launch fails',async()=>{
+ const root=await fs.mkdtemp(path.resolve('.runtime/tests/recovery-'));let now=new Date('2026-09-12T00:00:00Z'),online=true,count=0;
+ const s=new TaskScheduler({file:path.join(root,'tasks.json'),project:async()=>'a',now:()=>now,online:()=>online,canRun:()=>true,run:async()=>{count++;throw Error('fixture failure')}});await s.initialize();
+ try{await s.save({...task,frequency:'interval',intervalSeconds:30});await s.save({...task,name:'second',frequency:'interval',intervalSeconds:30});s.suspend();now=new Date('2026-09-12T01:00:00Z');await s.tick();assert.equal(count,0);await s.resume();assert.equal(count,1);await s.resume();await s.tick();assert.equal(count,1);const records=(await s.list()).runs;assert.equal(records.filter(r=>r.status==='failed').length,1);assert.equal(records.filter(r=>r.status==='skipped').length,1);assert.ok(records.every(r=>r.recovery==='休眠唤醒'));
+ online=false;await s.tick();now=new Date('2026-09-12T02:00:00Z');await s.tick();assert.equal(count,1);online=true;await s.tick();assert.equal(count,2);await s.tick();assert.equal(count,2);await s.stop();now=new Date('2026-09-12T03:00:00Z');await s.resume();await s.tick();assert.equal(count,2);
+ }finally{await s.stop()}
+});
 test('timezone schedule respects weekdays and hourly minute',()=>{assert.ok(scheduleSlot(task,new Date('2026-09-11T07:30:00Z')));assert.equal(scheduleSlot(task,new Date('2026-09-12T07:30:00Z')),null);assert.ok(scheduleSlot({...task,frequency:'hourly'},new Date('2026-09-12T08:30:00Z')));assert.throws(()=>validateTask({...task,time:'25:30'}));assert.throws(()=>validateTask({...task,timezone:'bad'}))});
 test('scheduler persists claims, skips offline time, scopes projects, and records native completion',async()=>{
  const root=await fs.mkdtemp(path.resolve('.runtime/tests/scheduler-')),file=path.join(root,'scheduler.json');let now=new Date('2026-09-11T07:29:00Z'),project='a',count=0,allowed=true;

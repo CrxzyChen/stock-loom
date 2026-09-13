@@ -20,8 +20,12 @@ async function fixture(){
       if(request.method==='model/list')result={data:[{model:'test-a',displayName:'Test A',isDefault:false},{model:'test-b',displayName:'Test B',isDefault:true},{model:'hidden',displayName:'Hidden',hidden:true}],nextCursor:null};
       if(request.id)queueMicrotask(()=>child.stdout.write(JSON.stringify({id:request.id,result})+'\n'));done();}});return child;
   }});
-  return {account,calls,get launch(){return launch},get opened(){return opened},complete(success=true){connected=success;notify({loginId:'test-login',success,error:success?null:'PRIVATE'})}};
+  return {account,calls,get launch(){return launch},get opened(){return opened},complete(success=true,error='PRIVATE'){connected=success;notify({loginId:'test-login',success,error:success?null:error})}};
 }
+test('encrypted credential persistence failure has a distinct sanitized message and invalidates observers',async()=>{
+  const f=await fixture();let changes=0;f.account.onChange=()=>changes++;
+  try{await f.account.login();f.complete(false,'failed to write OAuth tokens to encrypted auth storage: failed to decrypt secrets file PRIVATE');assert.equal(f.account.snapshot().pending,false);assert.match(f.account.snapshot().error,/加密凭证无法保存/);assert.ok(!f.account.snapshot().error.includes('PRIVATE'));assert.equal(changes,1)}finally{f.account.stop()}
+});
 test('account login, model selection, persistence, cancellation, logout and retry',async()=>{
   const f=await fixture();try{
     assert.equal((await f.account.refresh()).connected,false);

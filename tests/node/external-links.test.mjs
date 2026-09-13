@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {externalLink} from '../../apps/desktop/src/main/external-links.mjs';
+test('external links accept only HTTP(S) without credentials or controls',()=>{assert.equal(externalLink('https://example.com/report?q=1'),'https://example.com/report?q=1');for(const value of ['file:///C:/private','javascript:alert(1)','https://user:pass@example.com','https://example.com\ncmd',null])assert.throws(()=>externalLink(value))});

@@ -1,0 +1,15 @@
+{
+  "name": "binary",
+  "version": "0.3.0",
+  "declaredLicense": "MIT",
+  "provenance": "Debian maintainer copyright record, not an upstream LICENSE file",
+  "sourceSha256": "8a81de06e8d1e2867d82279fd97d046242359da6029d939aea8c16d9cf10a958",
+  "extraction": "34 added lines of debian/copyright in Debian commit e104a2d2e294d05e3f445f97ab79c8388b0c77b0; HTML markup decoded; archived email addresses retained as displayed",
+  "files": [
+    {
+      "name": "COPYRIGHT-Debian.txt",
+      "url": "https://alioth-lists.debian.net/pipermail/pkg-javascript-commits/2015-March/014781.html",
+      "sha256": "b3453fd2f8b841438ca82f3167d31dd1dc5a795980121364fe7eca78703887cb"
+    }
+  ]
+}

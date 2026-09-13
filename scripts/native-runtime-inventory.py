@@ -44,7 +44,14 @@ for file in files:
                         metadata[key.decode('utf8','replace')]=value.decode('utf8','replace')
         machine=hex(image.FILE_HEADER.Machine)
     finally:image.close()
-    matched=[str(candidate) for candidate in origins.get(file.name.lower(),[]) if digest(candidate)==checksum]
+    # This inventory ships to users: retain provenance without workstation paths.
+    matched=[]
+    for candidate in origins.get(file.name.lower(),[]):
+        if digest(candidate)!=checksum:continue
+        if candidate.is_relative_to(base):
+            matched.append('python-runtime/'+candidate.relative_to(base).as_posix())
+        else:
+            matched.append('python-environment/'+candidate.relative_to(pathlib.Path(sys.prefix)).as_posix())
     items.append({'file':file.relative_to(directory).as_posix(),'bytes':file.stat().st_size,'sha256':checksum,'machine':machine,'peVersionMetadata':metadata,'imports':imports,'byteIdenticalLocalOrigins':matched,'licenseReview':'not determined by PE metadata or byte match'})
 record={'schemaVersion':1,'scope':'Exact native files in frozen Python service only; no code executed. Does not enumerate statically linked components, Electron, Codex or installer native dependencies.','serviceSha256':build['binarySha256'],'runtime':build['runtime'],'localSupplier':supplier,'files':items,'unresolved':['libffi DLL has no reliable version metadata; filename alone does not prove its source version','Microsoft CRT redistribution provenance and notices require review','Static dependencies in CPython extensions, DuckDB and bootloader are not enumerated by PE imports','Local byte match proves copied bytes, not source-build provenance or redistribution permission']}
 print(json.dumps(record,ensure_ascii=True))

@@ -4,6 +4,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {UpdateController} from '../../apps/desktop/src/main/update-controller.mjs';
 async function fixture(overrides={}){const base=path.resolve('.runtime/tests');await fs.mkdir(base,{recursive:true});return new UpdateController({directory:await fs.mkdtemp(path.join(base,'update-controller-')),current:'0.1.0',getSchema:async()=>5,verify:async()=>({verified:true}),...overrides})}
+test('missing update manifest directs users to manual downloads without exposing raw errors',async()=>{
+ const controller=await fixture({check:async()=>{throw Object.assign(new Error('private diagnostic'),{code:'UPDATE_MANIFEST_MISSING'})}});
+ await controller.run('check');assert.equal(controller.status().state,'failed');assert.match(controller.status().message,/手动下载安装包/);assert.ok(!controller.status().message.includes('private'));
+});
 test('source persists without network request; successful download exposes no filesystem path',async()=>{
   let checks=0;
   const controller=await fixture({check:async()=>{checks++;return {available:true,update:{version:'0.2.0',notes:'fixture',size:4}}},download:async({onProgress})=>{onProgress({received:4,total:4});return {path:'internal-only'}}});

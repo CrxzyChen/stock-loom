@@ -1384,7 +1384,7 @@ export interface HoldingAccount {
   id: "manual";
   name: "项目手动持仓";
   currency: "CNY";
-  cash: null;
+  cash: string | null;
 }
 export interface LatestQuote {
   instrumentId: string;
@@ -1447,5 +1447,79 @@ export interface PortfolioIndustry {
   holdingCount: number;
   missingPriceCount: number;
   pricedHoldingsPercent: string | null;
+}
+export interface LedgerImportMapping {
+  tradeId: string;
+  instrumentId: string;
+  date: string;
+  kind: string;
+  quantity: string;
+  price: string;
+  fee: string;
+}
+export interface LedgerImportRequest {
+  csv: string;
+  mapping: LedgerImportMapping;
+  account: string;
+  commit: boolean;
+  previewToken: string | null;
+}
+export interface LedgerImportRow {
+  line: number;
+  tradeId: string;
+  instrumentId: string;
+  status: "ready" | "duplicate" | "error";
+  message: string;
+  date: string;
+  kind: string;
+  quantity: string;
+  price: string;
+  fee: string;
+}
+export interface LedgerImportResult {
+  previewToken: string;
+  committed: boolean;
+  errors: number;
+  ready: number;
+  duplicates: number;
+  rows: Array<LedgerImportRow>;
+}
+export interface CashEvent {
+  kind: "balance" | "deposit" | "withdrawal" | "fee";
+  date: string;
+  amount: string | null;
+}
+export interface CashWriteRequest {
+  requestId: string;
+  revision: number;
+  event: CashEvent | null;
+  supersedes: string | null;
+  voided: boolean;
+}
+export interface CashWriteResult {
+  eventId: string;
+  revision: number;
+}
+export interface CashRecord {
+  id: string;
+  event: CashEvent;
+  supersedes: string | null;
+  voided: boolean;
+  active: boolean;
+  createdAt: string;
+}
+export interface CashState {
+  revision: number;
+  state: "ready" | "missingBalance" | "unreconciledPosition";
+  balanceDate: string | null;
+  balance: string | null;
+  deposits: string;
+  withdrawals: string;
+  fees: string;
+  tradeNet: string;
+  totalAssets: string | null;
+  positionAdjustments: number;
+  events: Array<CashRecord>;
+  hasOlder: boolean;
 }
 export const PROVIDER_ENDPOINTS = ["stock_basic","trade_cal","daily","adj_factor","income","balancesheet","cashflow","daily_basic","index_daily","daily_info","sz_daily_info","anns_d","stk_limit","index_classify","index_member_all","sw_daily","stock_company","namechange","stk_managers","stk_rewards","stk_premarket","stock_st","st","stock_hsgt","bse_mapping","new_share","bak_basic","forecast","express","fina_indicator","fina_mainbz"] as const;

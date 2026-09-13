@@ -76,5 +76,5 @@ class CatalogTests(unittest.TestCase):
         sync_version=catalog_metadata(self.store,'calendar.sync',params,synced)
         proxy_version=catalog_metadata(self.store,'calendar.status',{'exchange':'BSE','date':'20240106'},status)
         self.assertEqual(sync_version,proxy_version);self.assertIn('local-calendar:SSE:2024:',proxy_version['sourceVersion']);self.assertIsNone(proxy_version['dataAsOf'])
-        self.assertEqual(self.store.overview()['schemaVersion'],9)
+        self.assertEqual(self.store.overview()['schemaVersion'],10)
         self.assertTrue(list((self.store.root/'backups').glob('pre-schema-2-*.sqlite')))

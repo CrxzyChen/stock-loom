@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {repository,checkUpdate,downloadUpdate,defaultUpdateChannel} from './updates.mjs';
+import {updateErrorMessage} from './update-errors.mjs';
 
 export class UpdateController{
   /** @param {{directory:string,current:string,getSchema:Function,check?:Function,download?:Function,verify?:(file:string,signal:AbortSignal)=>Promise<{verified:boolean,reason?:string}>}} options */
@@ -47,14 +48,14 @@ export class UpdateController{
       }else{
         this.state.received=0;
         const result=await this.downloadImpl({update:this.update,repo:this.state.repo,current:this.current,schema,directory:this.directory,signal,onProgress:progress=>{if(!signal.aborted)Object.assign(this.state,progress)}});
-        signal.throwIfAborted();this.state.state='verifying';this.state.message='正在核对 Windows 发布签名';
+        signal.throwIfAborted();this.state.state='verifying';this.state.message='正在核对安装包发布策略';
         const signature=await this.verify(result.path,signal);signal.throwIfAborted();
-        if(signature.verified){this.downloaded=result;this.state.state='verified';this.state.message='下载、完整性与发布签名校验通过。'}
+        if(signature.verified){this.downloaded=result;this.state.state='verified';this.state.message=signature.reason??'下载、完整性与发布签名校验通过。'}
         else{this.downloaded=null;this.state.state='untrusted';this.state.message=signature.reason}
       }
     })();
     this.pending=operation;
-    try{await operation}catch{this.state.state=signal.aborted?'cancelled':'failed';this.state.message=signal.aborted?'更新操作已取消':'更新操作失败，请检查发布文件、网络或兼容性。'}finally{this.pending=null;this.abort=null}
+    try{await operation}catch(error){this.state.state=signal.aborted?'cancelled':'failed';this.state.message=signal.aborted?'更新操作已取消':updateErrorMessage(error)}finally{this.pending=null;this.abort=null}
     return this.status();
   }
   cancel(){this.abort?.abort()}

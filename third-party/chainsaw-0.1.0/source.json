@@ -1,0 +1,13 @@
+{
+  "name": "chainsaw",
+  "version": "0.1.0",
+  "provenance": "Debian maintainer copyright record, not an upstream LICENSE file",
+  "archiveSha256": "8c8ce0c5e3d641c5c4f073e2637ac2c478426061818826b83087662dc2af2414",
+  "files": [
+    {
+      "name": "COPYRIGHT-Debian.txt",
+      "url": "https://deb.debian.org/debian/pool/main/n/node-chainsaw/node-chainsaw_0.1.0-5.debian.tar.xz",
+      "sha256": "bd34bc03a00662f25c448882c33a467aec2834cb2abe3be410822af63fb5f803"
+    }
+  ]
+}

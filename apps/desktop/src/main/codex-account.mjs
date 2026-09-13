@@ -14,7 +14,7 @@ export class CodexAccount{
   constructor({binary,home,evidencePath,openExternal,protect=async(child)=>async()=>{},spawnProcess=spawn}){
     this.binary=binary;this.home=home;this.evidencePath=evidencePath;this.openExternal=openExternal;this.protect=protect;this.spawnProcess=spawnProcess;
     this.pending=new Map();this.sequence=0;this.child=null;this.starting=null;this.refreshing=null;this.loginId=null;this.loginTimer=null;
-    this.state={connected:false,pending:false,model:'',models:[],error:''};
+    this.state={connected:false,pending:false,model:'',models:[],error:''};this.onChange=()=>{};
   }
   snapshot(){return structuredClone(this.state)}
   async start(){
@@ -41,9 +41,14 @@ export class CodexAccount{
       let index;while((index=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,index);buffer=buffer.slice(index+1);if(!line.trim())continue;
         try{const message=JSON.parse(line);
           if(message.id!==undefined){const p=this.pending.get(message.id);if(!p){fail();return}this.pending.delete(message.id);clearTimeout(p.timer);if(message.error)p.reject(Error('Codex 请求未完成，请检查网络后重试。'));else p.resolve(message.result)}
+          else if(message.method==='account/updated'){this.onChange()}
           else if(message.method==='account/login/completed'&&message.params?.loginId===this.loginId){
             this.loginId=null;clearTimeout(this.loginTimer);this.state.pending=false;
-            if(message.params.success===true)void this.refresh().catch(()=>{});else this.state.error='登录未完成，请重新登录。';
+            if(message.params.success===true)void this.refresh().catch(()=>{}).finally(()=>this.onChange());else{
+              const detail=typeof message.params.error==='string'?message.params.error:'';
+              this.state.error=/persist_failed|failed to (?:write OAuth tokens|decrypt secrets file)/i.test(detail)?'登录已完成，但本机加密凭证无法保存。请修复登录存储后重新登录。':'登录未完成，请重新登录。';
+              this.onChange();
+            }
           }
         }catch{fail();return}
       }

@@ -1,8 +1,9 @@
 import {createPublicKey,verify} from 'node:crypto';
+import trust from './update-trust.json' with {type:'json'};
 
 // Provision release public keys before shipping an updater-enabled build.
 // Keys from downloaded metadata are never trusted automatically.
-export const updateTrust=Object.freeze({});
+export const updateTrust=Object.freeze(Object.fromEntries(Object.entries(trust).map(([repo,keys])=>[repo,Object.freeze(keys)])));
 export function updateSigningBytes(repo,manifest){
  return Buffer.from(JSON.stringify(['stock-loom-update-v1',repo,Object.fromEntries(Object.keys(manifest).sort().map(k=>[k,manifest[k]]))]),'utf8');
 }

@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {verifyUpdateEnvelope,updateTrust} from './update-signatures.mjs';
+import {updateError} from './update-errors.mjs';
+async function fetchUpdate(fetcher,url,options){try{return await fetcher(url,options)}catch(error){if(options.signal?.aborted)options.signal.throwIfAborted();throw updateError('UPDATE_NETWORK','更新网络请求失败。')}}
 
 export function repository(value){
   if(typeof value!=='string'||! /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(value)||value.endsWith('.git'))throw Error('请输入 owner/repo 格式的发布仓库。');
@@ -23,25 +25,25 @@ export function validateUpdate(value,repo,schema){
   const keys=['format','version','platform','minDataSchema','maxDataSchema','size','sha256','notes'];
   if(!value||Object.keys(value).sort().join(',')!==keys.sort().join(',')||value.format!==1||value.platform!=='win32-x64'||!Number.isSafeInteger(value.size)||value.size<1||value.size>1024**3||typeof value.sha256!=='string'||! /^[a-f0-9]{64}$/.test(value.sha256)||typeof value.notes!=='string'||value.notes.length>12000)throw Error('更新清单格式无效。');
   versionParts(value.version);
-  if(!Number.isInteger(value.minDataSchema)||!Number.isInteger(value.maxDataSchema)||value.minDataSchema<1||value.maxDataSchema<value.minDataSchema||schema<value.minDataSchema||schema>value.maxDataSchema)throw Error('此更新未声明兼容当前资料版本。');
+  if(!Number.isInteger(value.minDataSchema)||!Number.isInteger(value.maxDataSchema)||value.minDataSchema<1||value.maxDataSchema<value.minDataSchema||schema<value.minDataSchema||schema>value.maxDataSchema)throw updateError('UPDATE_COMPATIBILITY','此更新未声明兼容当前资料版本。');
   return Object.freeze({...value,url:`https://github.com/${repo}/releases/download/v${value.version}/Stock-Loom-${value.version}-x64.exe`});
 }
 async function response(url,fetcher,signal){
   for(let redirects=0;redirects<=4;redirects++){
     const parsed=new URL(url);
-    if(parsed.protocol!=='https:'||parsed.username||parsed.password||parsed.port||!['github.com','release-assets.githubusercontent.com','objects.githubusercontent.com'].includes(parsed.hostname))throw Error('更新下载重定向到不受支持的来源。');
-    const result=await fetcher(url,{redirect:'manual',signal,headers:{Accept:'application/octet-stream'}});
+    if(parsed.protocol!=='https:'||parsed.username||parsed.password||parsed.port||!['github.com','release-assets.githubusercontent.com','objects.githubusercontent.com'].includes(parsed.hostname))throw updateError('UPDATE_SOURCE','更新下载重定向到不受支持的来源。');
+    const result=await fetchUpdate(fetcher,url,{redirect:'manual',signal,headers:{Accept:'application/octet-stream'}});
     if([301,302,303,307,308].includes(result.status)){
       const location=result.headers.get('location');await result.body?.cancel();if(!location)throw Error('下载重定向缺少目标。');url=new URL(location,url).href;continue;
     }
-    if(!result.ok){await result.body?.cancel();throw Error('更新服务暂不可用，或发布文件不存在。')}
+    if(!result.ok){await result.body?.cancel();throw updateError(result.status===404?(parsed.pathname.endsWith('/stock-update.json')?'UPDATE_MANIFEST_MISSING':'UPDATE_ASSET_MISSING'):[403,429].includes(result.status)?'UPDATE_RATE_LIMIT':'UPDATE_NETWORK','更新服务暂不可用，或发布文件不存在。')}
     return result;
   }
   throw Error('更新下载重定向次数过多。');
 }
 async function readJson(result,limit){
  const chunks=[];let size=0;
- for await(const chunk of result.body){size+=chunk.length;if(size>limit)throw Error('更新清单超过大小限制。');chunks.push(Buffer.from(chunk))}
+ for await(const chunk of result.body){size+=chunk.length;if(size>limit)throw updateError('UPDATE_FORMAT','更新清单超过大小限制。');chunks.push(Buffer.from(chunk))}
  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 export async function checkUpdate({repo,current,schema,channel=defaultUpdateChannel(current),fetcher=fetch,signal,trust=updateTrust}){
@@ -49,14 +51,16 @@ export async function checkUpdate({repo,current,schema,channel=defaultUpdateChan
  const timeout=AbortSignal.timeout(20000),combined=signal?AbortSignal.any([signal,timeout]):timeout;
  let manifestUrl=`https://github.com/${repo}/releases/latest/download/stock-update.json`,selected=null;
  if(channel==='preview'){
-  const result=await fetcher(`https://api.github.com/repos/${repo}/releases?per_page=100`,{redirect:'error',signal:combined,headers:{Accept:'application/vnd.github+json'}});
-  if(!result.ok){await result.body?.cancel();throw Error('无法读取预发布列表，请稍后重试。')}
+  const result=await fetchUpdate(fetcher,`https://api.github.com/repos/${repo}/releases?per_page=100`,{redirect:'error',signal:combined,headers:{Accept:'application/vnd.github+json'}});
+  if(!result.ok){await result.body?.cancel();throw updateError([403,429].includes(result.status)?'UPDATE_RATE_LIMIT':'UPDATE_NETWORK','无法读取预发布列表，请稍后重试。')}
   selected=selectRelease(await readJson(result,2*1024*1024),channel);
   if(!selected||!newer(selected.tag_name.slice(1),current))return {available:false,update:null};
   manifestUrl=`https://github.com/${repo}/releases/download/${selected.tag_name}/stock-update.json`;
  }
  const result=await response(manifestUrl,fetcher,combined);
- const update=validateUpdate(verifyUpdateEnvelope(await readJson(result,32768),repo,trust),repo,schema);
+ let envelope;try{envelope=await readJson(result,32768)}catch(error){if(combined.aborted)combined.throwIfAborted();if(error.code)throw error;throw updateError('UPDATE_FORMAT','更新清单格式无效。')}
+ let payload;try{payload=verifyUpdateEnvelope(envelope,repo,trust)}catch{throw updateError('UPDATE_SIGNATURE','更新清单签名无效。')}
+ const update=validateUpdate(payload,repo,schema);
  if(selected&&'v'+update.version!==selected.tag_name)throw Error('更新清单与发布标签不一致。');
  if(channel==='stable'&&versionParts(update.version)[3]!==3)throw Error('稳定渠道不能安装预发布版本。');
  return {available:newer(update.version,current),update};
@@ -74,9 +78,9 @@ export async function downloadUpdate({update,repo,schema,current,directory,fetch
   combined.throwIfAborted();
   const file=await fs.open(pending,'wx');const hash=createHash('sha256');let size=0;
   try{
-    for await(const chunk of result.body){combined.throwIfAborted();size+=chunk.length;if(size>update.size)throw Error('安装包超过清单声明的大小。');hash.update(chunk);await file.writeFile(chunk);onProgress({received:size,total:update.size})}
+    for await(const chunk of result.body){combined.throwIfAborted();size+=chunk.length;if(size>update.size)throw updateError('UPDATE_INTEGRITY','安装包超过清单声明的大小。');hash.update(chunk);await file.writeFile(chunk);onProgress({received:size,total:update.size})}
     combined.throwIfAborted();
-    if(size!==update.size||hash.digest('hex')!==update.sha256)throw Error('安装包大小或校验和不匹配，未发布下载结果。');
+    if(size!==update.size||hash.digest('hex')!==update.sha256)throw updateError('UPDATE_INTEGRITY','安装包大小或校验和不匹配，未发布下载结果。');
     await file.sync();
   }finally{await file.close()}
   combined.throwIfAborted();

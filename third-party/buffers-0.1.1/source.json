@@ -1,0 +1,15 @@
+{
+  "name": "buffers",
+  "version": "0.1.1",
+  "declaredLicense": "MIT",
+  "provenance": "Debian maintainer copyright record, not an upstream LICENSE file",
+  "sourceSha256": "53a5f11cf2ee466b27f60409caed8fb9c4bbfe5fecac28485d11c675e882089f",
+  "extraction": "Read only debian/copyright archive member",
+  "files": [
+    {
+      "name": "COPYRIGHT-Debian.txt",
+      "url": "https://deb.debian.org/debian/pool/main/n/node-buffers/node-buffers_0.1.1-5.debian.tar.xz",
+      "sha256": "7ed63688e5bc3c442bcebf756f04a4be5337a51ec8d4b51804349977a9667f0a"
+    }
+  ]
+}

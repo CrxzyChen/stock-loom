@@ -1,7 +1,7 @@
 {
   "scope": "Python Store.dispatch RPC only; does not include Electron IPC or Agent tools",
-  "methods": 99,
-  "bothMapped": 99,
+  "methods": 102,
+  "bothMapped": 102,
   "rows": [
     {
       "method": "announcements.read",
@@ -77,6 +77,16 @@
       "method": "calendar.sync",
       "request": "CalendarSyncRequest",
       "response": "CalendarSyncResult"
+    },
+    {
+      "method": "cash.read",
+      "request": "NoParams",
+      "response": "CashState"
+    },
+    {
+      "method": "cash.write",
+      "request": "CashWriteRequest",
+      "response": "CashWriteResult"
     },
     {
       "method": "catalog.sync",
@@ -187,6 +197,11 @@
       "method": "jobs.retry",
       "request": "JobRetryRequest",
       "response": "Job"
+    },
+    {
+      "method": "ledger.import",
+      "request": "LedgerImportRequest",
+      "response": "LedgerImportResult"
     },
     {
       "method": "ledger.read",

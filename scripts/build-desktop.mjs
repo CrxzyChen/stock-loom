@@ -11,4 +11,9 @@ await build({entryPoints:['apps/desktop/src/preload/preload.ts'],outfile:'dist/m
 const renderer=await buildVite({configFile:'apps/desktop/vite.config.ts'});
 await buildWorkers();
 fs.mkdirSync('build',{recursive:true});
-fs.writeFileSync('build/desktop-current.json',JSON.stringify(makeDesktopManifest(renderer),null,2));
+const pdfAssets=[];
+for(const folder of ['cmaps','standard_fonts','wasm']){
+ const source=`node_modules/pdfjs-dist/${folder}`,target=`dist/renderer/pdf-assets/${folder}`;fs.mkdirSync(target,{recursive:true});
+ for(const entry of fs.readdirSync(source,{withFileTypes:true})){if(!entry.isFile())continue;const file=`${target}/${entry.name}`;fs.copyFileSync(`${source}/${entry.name}`,file);pdfAssets.push(file)}
+}
+fs.writeFileSync('build/desktop-current.json',JSON.stringify(makeDesktopManifest(renderer,pdfAssets),null,2));

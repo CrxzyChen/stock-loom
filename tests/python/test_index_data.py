@@ -1,11 +1,40 @@
 import pathlib,sys,unittest
-import tempfile,json
+import tempfile,json,hashlib
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[2]/'apps/data-service'))
 from index_data import fetch_index,index_rows
 from provider import ProviderError
 from main import Store
 
 class IndexTests(unittest.TestCase):
+    def test_non_trading_snapshot_cannot_mask_valid_close(self):
+        root=pathlib.Path(tempfile.mkdtemp(prefix='index-calendar-',dir=pathlib.Path(__file__).resolve().parents[2]/'.runtime/tests'))
+        store=Store(root)
+        try:
+            p={'token':'synthetic','indexId':'000001.SH','start':'20240101','end':'20240107'}
+            saved=store.sync_index(p,lambda *args:[self.row()])
+            for day in ('20240106','20240107'):
+                bad=self.row();bad['trade_date']=day
+                with self.assertRaises(ProviderError):store.sync_index(p,lambda *args:[bad])
+            # A valid hash alone must not make a legacy weekend snapshot usable.
+            manifest=json.loads(store.db.execute('SELECT manifest FROM snapshots WHERE id=?',(saved['snapshotId'],)).fetchone()[0])
+            manifest['payload']['source'][0]['trade_date']='20240106';manifest['asOf']='20240106'
+            encoded=json.dumps(manifest['payload'],sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False)
+            identifier=hashlib.sha256(encoded.encode()).hexdigest();manifest['snapshotId']=identifier
+            store.db.execute('INSERT INTO snapshots VALUES (?,?,?,?)',(identifier,'index:000001.SH','20240106',json.dumps(manifest)))
+            self.assertEqual(store.read_index({'indexId':'000001.SH'}),saved)
+            with self.assertRaises(ProviderError):store.read_index({'indexId':'000001.SH','snapshotId':identifier})
+            self.assertEqual(store.db.execute('SELECT COUNT(*) FROM snapshots').fetchone()[0],2)
+            store.db.commit()
+            backup=store.create_backup({})
+            restored=store.restore_backup({'archive':backup['path']})
+            candidate=Store(root.parent/restored['directory'])
+            try:
+                self.assertEqual(candidate.db.execute('SELECT COUNT(*) FROM snapshots').fetchone()[0],2)
+                self.assertEqual(candidate.read_index({'indexId':'000001.SH'}),saved)
+                with self.assertRaises(ProviderError):candidate.read_index({'indexId':'000001.SH','snapshotId':identifier})
+            finally:candidate.close()
+        finally:store.close()
+
     def test_snapshot_backup_and_failed_sync_preserves_previous(self):
         root=pathlib.Path(tempfile.mkdtemp(prefix='index-store-',dir=pathlib.Path(__file__).resolve().parents[2]/'.runtime/tests'))
         store=Store(root/'profile')

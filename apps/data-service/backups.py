@@ -51,7 +51,7 @@ class Backups:
         self.latest_screen({})
         self.validate_model_recaps()
         for row in self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset LIKE 'index:%'"):
-            self.checked_index(row)
+            self.checked_index(row,for_archive=True)
         for row in self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset LIKE 'sectors:%' OR dataset LIKE 'sector-history:%'"):
             self.checked_sector(row)
         for row in self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset='breadth:daily'"):

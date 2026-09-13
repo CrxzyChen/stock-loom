@@ -5,9 +5,9 @@ import vm from 'node:vm';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const docs=path.join(root,'docs');
-const round=process.argv.includes('--round1')?1:process.argv.includes('--round2')?2:3;
-const round2=round===2,round3=round===3;
-const planFile=round3?'round3-plan.json':round2?'round2-plan.json':'mvp-plan.json';
+const round=process.argv.includes('--round1')?1:process.argv.includes('--round2')?2:process.argv.includes('--round3')?3:4;
+const round2=round===2,round3=round===3,round4=round===4;
+const planFile=round4?'round4-plan.json':round3?'round3-plan.json':round2?'round2-plan.json':'mvp-plan.json';
 const plan=JSON.parse(fs.readFileSync(path.join(docs,planFile),'utf8').replace(/^\uFEFF/,''));
 const labels={todo:'待开始',doing:'进行中',review:'待验收',blocked:'受阻',deferred:'已暂缓',done:'已完成'};
 const tasks=plan.phases.flatMap(p=>p.tasks);
@@ -58,14 +58,17 @@ const checked=ids=>ids.every(id=>byId.get(id)?.status==='done')?'x':' ';
 md+=`\n## 发布门槛\n\n- [${done===tasks.length?'x':' '}] 所有必交付任务附证据完成，无未解决的阻断问题。\n- [${checked(['M1-05','M5-03','M5-04','M6-01','M6-02'])}] 干净 Windows 安装、真实数据旅程、恢复及升级通过。\n- [${checked(['M6-04'])}] 数据权限、模型配置、已知限制及发布说明已交付。\n\n发布门槛由对应任务的完成证据驱动，不因规划文档完成而勾选。\n`;
 if(round2){md=md.slice(0,md.indexOf('\n## 发布门槛')).replaceAll('Stock MVP','Stock Round 2').replaceAll('mvp-plan.json','round2-plan.json').replaceAll('mvp-development.md','round2-development.md');md+='\n\n## 验收边界\n\n第一轮已获用户阶段验收，技术遗留项保留；异机安装测试暂缓。Round 2 以开发文档中的完整使用场景及真实证据验收，不将规划完成计入实现进度。\n'}
 if(round3){md=md.slice(0,md.indexOf('\n## 发布门槛')).replaceAll('Stock MVP','Stock Loom Round 3').replaceAll('mvp-plan.json','round3-plan.json').replaceAll('mvp-development.md','round3-development.md');md=md.replace('开发完成：**'+done+'/'+tasks.filter(t=>t.status!=='deferred').length+'**','开发完成：**'+done+'/'+tasks.length+'**');md+='\n\n## Beta 发布门槛\n\n- ['+(tasks.every(t=>t.status==='done')?'x':' ')+'] 全部任务验收通过，包括暂缓的异机安装；无阻断缺陷。\n- ['+checked(['A2-08','B-03'])+'] 真实升级、数据保留和恢复证据齐备。\n- ['+checked(['B-01','B-05','B-06'])+'] 分发、使用验收和发布资源通过。\n\n暂缓项不从完整 Beta 门槛中豁免；当前只规划，不执行异机测试。\n'}
-const template=fs.readFileSync(path.join(docs,'progress',round3?'round3-template.html':round2?'round2-template.html':'template.html'),'utf8');
+if(round3&&plan.acceptance?.status==='accepted'){md=md.slice(0,md.indexOf('\n\n## Beta 发布门槛'))+'\n\n## Round 3 验收\n\n- [x] 2026-09-13 用户确认本轮验收通过，v0.1.0-beta.1 已交付。\n\n原任务计数为技术证据快照；未完成项转入后续跟进，未执行测试不标记通过。详见 [验收记录](round3-acceptance.md)。\n';}
+
+if(round4){md=md.slice(0,md.indexOf('\n## 发布门槛')).replaceAll('Stock MVP','Stock Loom Round 4').replaceAll('mvp-plan.json','round4-plan.json').replaceAll('mvp-development.md','round4-development.md');md+='\n\n## 核心交付验收\n\n- ['+checked(['U-04'])+'] 首次手动引导和后续真实应用内升级、数据保留通过。\n- ['+checked(['W-04','R-05'])+'] 浏览网页、保存项目资料、引用预览及股票信息旅程通过。\n- ['+checked(['D-04'])+'] 版本资产、许可和兼容说明齐备。\n\n日常增强可分批交付，未完成项不标通过。异机测试继续暂缓；不要求盈利前购买商业证书。\n';}
+const template=fs.readFileSync(path.join(docs,'progress',round4?'round4-template.html':round3?'round3-template.html':round2?'round2-template.html':'template.html'),'utf8');
 assert(template.includes('__PLAN_JSON__'),'缺少数据插槽');
 const html=template.replace('__PLAN_JSON__',JSON.stringify(plan).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029'));
 for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)){
   if(match[0].includes('type="application/json"'))continue;
   new vm.Script(match[1]);
 }
-const outputs=[[path.join(docs,round3?'round3-checklist.md':round2?'round2-checklist.md':'mvp-checklist.md'),md],[path.join(docs,'progress','dist',round3?'index.html':round2?'round2.html':'round1.html'),html]];
+const outputs=[[path.join(docs,round4?'round4-checklist.md':round3?'round3-checklist.md':round2?'round2-checklist.md':'mvp-checklist.md'),md],[path.join(docs,'progress','dist',round4?'index.html':round3?'round3.html':round2?'round2.html':'round1.html'),html]];
 for(const [,href] of html.matchAll(/href="([^"]+)"/g)){
   if(href.startsWith('#')||href.startsWith('data:'))continue;
   assert(!/^https?:/.test(href),'离线看板不应依赖远程资源');

@@ -10,6 +10,7 @@ function fixture(){
   const presence=new DesktopPresence({Tray,Menu:{buildFromTemplate:items=>items},nativeImage:{createFromBitmap:()=>({isEmpty:()=>false})},Notification,getWindow:()=>window,quit:()=>quits++});
   return {presence,window,notifications,quits:()=>quits};
 }
+test('scheduled notification opens its exact conversation and stops after shutdown',()=>{const f=fixture();let opened=0;assert.equal(f.presence.notifyScheduled({title:'task',body:'important change',onClick:()=>opened++}),true);assert.equal(f.notifications[0].options.body,'important change');f.notifications[0].emit('click');assert.equal(opened,1);assert.equal(f.window.visible,true);f.presence.shutdown();assert.equal(f.presence.notifyScheduled({title:'task',body:'ignored'}),false)});
 test('close defaults to exit; opted-in tray hides, reopens, and explicit exit bypasses hiding',()=>{
   const f=fixture();let prevented=0;const event={preventDefault:()=>prevented++};
   assert.equal(f.presence.close(event),false);assert.equal(prevented,0);

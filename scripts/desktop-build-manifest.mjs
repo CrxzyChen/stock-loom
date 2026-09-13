@@ -4,9 +4,9 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {extractFile,listPackage} from '@electron/asar';
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
-export function makeDesktopManifest(renderer){
+export function makeDesktopManifest(renderer,assets=[]){
   const outputs=(Array.isArray(renderer)?renderer:[renderer]).flatMap(item=>item.output.map(file=>'dist/renderer/'+file.fileName));
-  const files=[...new Set(['dist/main/main.cjs','dist/main/preload.cjs','dist/agent/worker.mjs','dist/agent/recap-worker.mjs','dist/tools/mcp-server.mjs',...outputs])].sort();
+  const files=[...new Set(['dist/main/main.cjs','dist/main/preload.cjs','dist/agent/worker.mjs','dist/agent/recap-worker.mjs','dist/tools/mcp-server.mjs',...outputs,...assets])].sort();
   assert.ok(files.includes('dist/renderer/index.html'));
   return {createdAt:new Date().toISOString(),files:files.map(file=>{assert.ok(/^dist\/[A-Za-z0-9_./-]+$/.test(file)&&!file.split('/').includes('..'));const bytes=fs.readFileSync(file);return {file,bytes:bytes.length,sha256:digest(bytes)}})};
 }

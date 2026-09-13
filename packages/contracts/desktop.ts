@@ -12,6 +12,10 @@ export interface DesktopBridge {
   readReference(p:import('./generated').ReferenceReadRequest):Promise<import('./generated').ReferencePage>;
   syncReference(p:import('./generated').ReferenceParams):Promise<import('./generated').ReferenceSyncResult>;
   copilotTools(threadId:string,cursor?:string|null):Promise<{data:{name:string;runtimeStatus:string|null;authStatus:string;toolCount:number;discoveryFailed:boolean}[];nextCursor:string|null}>;
+  browserToolsStatus():Promise<{enabled:boolean;available:boolean;browserInstalled:boolean}>;
+  saveBrowserTools(enabled:boolean):Promise<void>;
+  accountUsage():Promise<{state:string;message:string;updatedAt:string|null;buckets:{id:string;name:string;windows:{id:string;usedPercent:number|null;remainingPercent:number|null;durationMins:number|null;resetsAt:number|null}[]}[]}>;
+  onAccountUsageChanged(handler:()=>void):()=>void;
   nativeMcpRead():Promise<{project:string;file:string|null;version:string|null;servers:{name:string;enabled:boolean;effectiveEnabled:boolean|null;type:string}[]}>;
   nativeMcpWrite(value:Record<string,unknown>):Promise<Awaited<ReturnType<DesktopBridge['nativeMcpRead']>>&{status:string}>;
   openManagedLocation(target:'config'|'project'|'data'):Promise<void>;
@@ -30,6 +34,10 @@ export interface DesktopBridge {
   codexSandboxSetup(mode:'elevated'|'unelevated'):Promise<{readiness:string;mode:string|null}>;
   readLedger(params:import('./generated').LedgerReadRequest):Promise<import('./generated').LedgerReadResult>;
   writeLedger(params:import('./generated').LedgerWriteRequest):Promise<import('./generated').LedgerWriteResult>;
+  importLedger(params:import('./generated').LedgerImportRequest):Promise<import('./generated').LedgerImportResult>;
+  exportLedgerTemplate():Promise<boolean>;
+  readCash():Promise<import('./generated').CashState>;
+  writeCash(params:import('./generated').CashWriteRequest):Promise<import('./generated').CashWriteResult>;
   holdings():Promise<import('./generated').Holding[]>;
   latestQuotes(instrumentIds:string[]):Promise<import('./generated').LatestQuote[]>;
   holdingsSummary():Promise<import('./generated').HoldingsSummary>;
@@ -42,6 +50,10 @@ export interface DesktopBridge {
   projectReveal(path:string):Promise<void>;
   projectImage(path:string):Promise<string>;
   projectList(path:string):Promise<{path:string;entries:{name:string;path:string;directory:boolean;link:boolean}[];truncated:boolean}>;
+  projectPreviewBytes(path:string):Promise<Uint8Array>;
+  projectOpenExternal(path:string):Promise<void>;
+  openExternalLink(url:string):Promise<void>;
+  projectDescribe(path:string):Promise<{path:string;kind:string;size:number;modifiedAt:string;source:null|{version:number;title:string;url:string;collectedAt:string;instrumentId?:string}}>;
   projectRead(path:string):Promise<{path:string;text:string;revision:string;modifiedAt:string}>;
   projectWrite(path:string,text:string,revision:string):Promise<{path:string;text:string;revision:string;modifiedAt:string;backup:string}>;
   copilotProject():Promise<{path:string;state:string}>;
@@ -82,6 +94,7 @@ export interface DesktopBridge {
   windowMaximized():Promise<boolean>;
   onWindowMaximized(listener:(maximized:boolean)=>void):()=>void;
   updateStatus():Promise<UpdateStatus>;
+  openUpdateDownloads():Promise<void>;
   configureUpdates(repo:string,channel?:'stable'|'preview'):Promise<UpdateStatus>;
   checkUpdates():Promise<UpdateStatus>;
   downloadUpdate():Promise<UpdateStatus>;

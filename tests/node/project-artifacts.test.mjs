@@ -1,0 +1,14 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';
+import {ProjectFiles} from '../../apps/desktop/src/main/project-files.mjs';import {sourceMetadata} from '../../apps/desktop/src/main/project-artifacts.mjs';import {ensureBrowserProjectSkill} from '../../apps/desktop/src/main/browser-project-skill.mjs';import {projectLink} from '../../apps/desktop/src/renderer/project-links.mjs';
+const source={version:1,title:'Annual report',url:'https://example.com/report.pdf',collectedAt:'2026-09-13T00:00:00Z'};
+test('artifact descriptor reads optional bounded source metadata and blocks paths outside project',async()=>{
+const base=await fs.mkdtemp(path.resolve('.runtime/artifacts-')),root=path.join(base,'project');await fs.mkdir(root);const f=new ProjectFiles(async()=>({path:root}));await fs.writeFile(path.join(root,'report.pdf'),'%PDF-fixture');await fs.writeFile(path.join(root,'report.pdf.source.json'),JSON.stringify(source));
+const descriptor=await f.describe('report.pdf');assert.equal(descriptor.kind,'pdf');assert.equal(descriptor.source.url,source.url);assert.equal(descriptor.size,12);
+await fs.writeFile(path.join(root,'report.pdf.source.json'),'x'.repeat(16385));assert.equal((await f.describe('report.pdf')).source,null);
+await fs.writeFile(path.join(base,'outside.md'),'outside');await fs.symlink(base,path.join(root,'escape'),'junction');await assert.rejects(f.describe('escape/outside.md'),/不在当前项目/);await assert.rejects(f.describe('../outside.md'),/不在当前项目/);
+});
+test('source metadata rejects scripts, credentials and invalid dates',()=>{for(const change of [{url:'javascript:alert(1)'},{url:'https://user:password@example.com'},{collectedAt:'bad'},{instrumentId:'guess'}])assert.equal(sourceMetadata({...source,...change}),null);assert.equal(sourceMetadata(source).title,source.title)});
+test('file links resolve relative to the document without escaping project',()=>{
+assert.equal(projectLink('../sources/report.pdf','D:/project','notes/analysis.md'),'sources/report.pdf');assert.equal(projectLink('./table.csv','D:/project','notes/analysis.md'),'notes/table.csv');assert.equal(projectLink('../../outside','D:/project','notes/analysis.md'),null);assert.equal(projectLink('#section','D:/project','notes/analysis.md'),null);assert.equal(projectLink('https://example.com','D:/project','notes/analysis.md'),null);
+});
+test('browser skill installation preserves user modifications',async()=>{const root=await fs.mkdtemp(path.resolve('.runtime/skill-'));await ensureBrowserProjectSkill(root);const file=path.join(root,'.agents/skills/stock-loom-browser/SKILL.md');assert.match(await fs.readFile(file,'utf8'),/source.json/);await fs.writeFile(file,'user instructions');await ensureBrowserProjectSkill(root);assert.equal(await fs.readFile(file,'utf8'),'user instructions')});

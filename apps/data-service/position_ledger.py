@@ -55,7 +55,7 @@ def migrate_position_ledger(db,root):
     import json,sqlite3,uuid
     from pathlib import Path
     version=db.execute('PRAGMA user_version').fetchone()[0]
-    if version==9:return None
+    if version>=9:return None
     if version!=8 or db.in_transaction:raise ProviderError('INVALID_STATE','账本迁移需要已提交的版本8数据库。')
     backup_path=Path(root)/'backups'/('pre-schema-9-'+str(uuid.uuid4())+'.sqlite')
     backup=sqlite3.connect(backup_path)
@@ -96,7 +96,7 @@ class PositionLedger:
         import json,re,uuid
         from transactions import atomic
         if set(p)!={'instrumentId','requestId','revision','event','supersedes','voided'} or not isinstance(p['instrumentId'],str) or not re.fullmatch(r'\d{6}\.(SH|SZ|BJ)',p['instrumentId']) or not isinstance(p['requestId'],str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,100}',p['requestId']) or type(p['revision']) is not int or p['revision']<0 or type(p['voided']) is not bool:raise ProviderError('INVALID_PARAMS','交易记录参数无效。')
-        if self.db.execute('PRAGMA user_version').fetchone()[0]!=9:raise ProviderError('INVALID_STATE','持仓账本尚未启用。')
+        if self.db.execute('PRAGMA user_version').fetchone()[0]<9:raise ProviderError('INVALID_STATE','持仓账本尚未启用。')
         encoded=json.dumps(p,sort_keys=True,separators=(',',':'),ensure_ascii=False)
         with atomic(self.db):
             previous=self.db.execute('SELECT request,response FROM ledger_requests WHERE request_id=?',(p['requestId'],)).fetchone()

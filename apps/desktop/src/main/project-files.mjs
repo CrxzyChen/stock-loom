@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
+import {artifactKind,sourceMetadata} from './project-artifacts.mjs';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 
 export class ProjectFiles{
@@ -8,7 +9,7 @@ export class ProjectFiles{
   async resolve(relative){
     if(typeof relative!=='string'||relative.length>4096||relative.includes('\0')||path.isAbsolute(relative))throw Error('项目路径无效。');
     const root=await fs.realpath((await this.location()).path);
-    const target=await fs.realpath(path.resolve(root,relative));
+    let target;try{target=await fs.realpath(path.resolve(root,relative))}catch(error){if(error.code==='ENOENT')throw Error('文件已删除或移动，请刷新项目列表。');throw Error('文件暂时无法访问，请检查权限后重试。')}
     const remainder=path.relative(root,target);
     if(remainder==='..'||remainder.startsWith('..'+path.sep)||path.isAbsolute(remainder))throw Error('文件不在当前项目内。');
     return {root,target};
@@ -18,6 +19,24 @@ export class ProjectFiles{
     const entries=rows.filter(row=>!['.git','node_modules','__pycache__','.cache','.pytest_cache','.runtime'].includes(row.name)&&!row.name.includes('.stock-backup-')&&!row.name.includes('.stock-draft-')).map(row=>({name:row.name,path:path.join(relative,row.name).replaceAll('\\','/'),directory:row.isDirectory(),link:row.isSymbolicLink()}));
     entries.sort((a,b)=>Number(b.directory)-Number(a.directory)||a.name.localeCompare(b.name));
     return {path:relative,entries:entries.slice(0,1000),truncated:entries.length>1000};
+  }
+  async describe(relative){
+    const {target}=await this.resolve(relative),stat=await fs.stat(target);if(!stat.isFile())throw Error('请选择文件。');
+    let source=null;
+    try{
+      const {target:sidecar}=await this.resolve(relative+'.source.json'),file=await fs.open(sidecar,'r');
+      try{const bytes=Buffer.alloc(16385),{bytesRead}=await file.read(bytes,0,bytes.length,0);if(bytesRead<=16384)source=sourceMetadata(JSON.parse(bytes.subarray(0,bytesRead).toString('utf8')))}finally{await file.close()}
+    }catch{/* Optional metadata cannot prevent opening the original file. */}
+    return {path:relative.replaceAll('\\','/'),kind:artifactKind(target),size:stat.size,modifiedAt:stat.mtime.toISOString(),source};
+  }
+  async previewBytes(relative){
+    const {target}=await this.resolve(relative),ext=path.extname(target).toLowerCase();
+    const limit={'.pdf':25,'.xlsx':5,'.csv':8,'.tsv':8}[ext];if(!limit)throw Error('文件格式不支持。');
+    const file=await fs.open(target,'r');try{
+      const stat=await file.stat();if(!stat.isFile()||stat.size>limit*1024*1024)throw Error(`文件超过 ${limit} MB，请用系统程序打开。`);
+      const buffer=Buffer.alloc(limit*1024*1024+1),{bytesRead}=await file.read(buffer,0,buffer.length,0);if(bytesRead>limit*1024*1024)throw Error('文件读取期间增大，请用系统程序打开。');
+      return new Uint8Array(buffer.subarray(0,bytesRead));
+    }finally{await file.close()}
   }
   async search(query){
     if(typeof query!=='string'||query.length>200)throw Error('搜索内容无效。');

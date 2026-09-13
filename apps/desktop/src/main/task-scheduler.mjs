@@ -1,7 +1,7 @@
 import {CronExpressionParser} from 'cron-parser';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 export async function replaceSchedulerFile(from,to,rename=fs.rename){
  for(let attempt=0;;attempt++){try{await rename(from,to);return}catch(error){if(!['EPERM','EACCES','EBUSY'].includes(error.code)||attempt>=4)throw error;await delay(25*(attempt+1))}}
@@ -16,9 +16,20 @@ export function nextTaskDue(task,date){
  const [hour,minute]=task.time.split(':').map(Number);
  return nextCron({timezone:task.timezone,cron:`0 ${minute} ${task.frequency==='hourly'?'*':hour} * * ${task.frequency==='weekdays'?'1-5':'*'}`},date);
 }
+export function claimRecoveredSlots(tasks,from,now){
+ const due=[];
+ for(const task of tasks){if(!task.enabled)continue;const deadline=nextTaskDue(task,from);if(deadline===null||deadline>now.getTime())continue;
+  if(task.frequency==='cron')task.nextDue=nextCron(task,now);
+  else if(task.frequency==='interval')task.nextDue=now.getTime()+task.intervalSeconds*1000;
+  else task.lastSlot=scheduleSlot(task,now)??task.lastSlot;
+  due.push(task);
+ }
+ return due;
+}
 export function validateTask(input){
- if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['id','name','prompt','frequency','time','timezone','enabled','permissionMode','intervalSeconds','cron'].includes(k)))throw Error('任务格式无效。');
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['id','name','prompt','frequency','time','timezone','enabled','permissionMode','intervalSeconds','cron','notifyEnabled'].includes(k)))throw Error('任务格式无效。');
  const t={...input};
+ if(t.notifyEnabled!==undefined&&typeof t.notifyEnabled!=='boolean')throw Error('提醒设置无效。');
  if(t.id!==undefined&&(typeof t.id!=='string'||! /^[0-9a-f-]{36}$/.test(t.id)))throw Error('任务标识无效。');
  if(typeof t.name!=='string'||!t.name.trim()||t.name.length>80||typeof t.prompt!=='string'||!t.prompt.trim()||t.prompt.length>10000)throw Error('请填写任务名称和内容。');
  if(t.frequency==='cron'){nextCron(t,new Date());t.time=t.time??'00:00'}
@@ -39,25 +50,46 @@ export function scheduleSlot(task,date){
 /** @returns {{threadId?:string,message:string}|null} */
 function noBlocker(){return null}
 export class TaskScheduler{
- constructor({file,project,canRun,run,blocker=noBlocker,publish=()=>{},now=()=>new Date()}){Object.assign(this,{file,project,canRun,run,blocker,publish,now});this.data={tasks:[],runs:[]};this.chain=Promise.resolve();this.startedAt=now().getTime();this.stopped=false;this.timer=null;this.error=''}
- async initialize(){try{this.data=JSON.parse(await fs.readFile(this.file,'utf8'));if(!Array.isArray(this.data.tasks)||!Array.isArray(this.data.runs))throw Error('invalid');for(const t of this.data.tasks){const {project,lastSlot,nextDue,threadId,...input}=t;validateTask(input);if(threadId!==undefined&&(typeof threadId!=='string'||!threadId))throw Error('invalid thread');t.threadId=threadId??this.data.runs.findLast(r=>r.taskId===t.id&&r.project===t.project&&r.threadId)?.threadId;if(t.frequency==='cron')t.nextDue=nextCron(t,this.now());if(t.frequency==='interval')t.nextDue=this.now().getTime()+t.intervalSeconds*1000}}catch(e){if(e.code!=='ENOENT')throw Error('无法读取定时任务，请检查存储文件。')}
+ constructor({file,project,canRun,run,blocker=noBlocker,publish=()=>{},notify=(_notice)=>false,online=()=>true,now=()=>new Date()}){Object.assign(this,{file,project,canRun,run,blocker,publish,notify,online,now});this.publish=publish;this.notify=notify;this.data={tasks:[],runs:[],notices:[]};this.chain=Promise.resolve();this.startedAt=now().getTime();this.stopped=false;this.timer=null;this.error='';this.suspendedAt=null;this.offlineAt=null}
+ notifyCurrent(p){return this.locked(async()=>{
+  if(!p||Object.keys(p).sort().join(',')!=='key,message'||typeof p.key!=='string'||!p.key.trim()||p.key.length>160||typeof p.message!=='string'||!p.message.trim()||p.message.length>400)throw Error('提醒内容无效。');
+  if(this.stopped)return {status:'noActiveTask'};
+  const project=await this.project(),record=this.data.runs.findLast(r=>r.project===project&&r.status==='running'),task=record&&this.data.tasks.find(t=>t.id===record.taskId&&t.project===project);
+  if(!task)return {status:'noActiveTask'};
+  if(!task.notifyEnabled)return {status:'muted'};
+  const key=createHash('sha256').update(JSON.stringify([project,task.id,p.key])).digest('hex');
+  const notices=this.data.notices??[];if(notices.includes(key))return {status:'duplicate'};
+  // Claim before delivery: recovery must not repeat an already-submitted alert.
+  this.data.notices=[...notices,key].slice(-1000);record.notification={message:p.message,status:'pending'};await this.persist();
+  try{record.notification.status=await this.notify({title:task.name,body:p.message,project,threadId:record.threadId,turnId:record.turnId})?'submitted':'unavailable'}catch{record.notification.status='unavailable'}
+  await this.persist();return {status:record.notification.status};
+ })}
+ suspend(){if(!this.stopped)this.suspendedAt=this.suspendedAt??this.now()}
+ resume(){return this.locked(async()=>{if(this.stopped||!this.suspendedAt)return;const from=this.offlineAt&&this.offlineAt<this.suspendedAt?this.offlineAt:this.suspendedAt;this.suspendedAt=null;if(!this.online()){this.offlineAt=from;return}this.offlineAt=null;await this.recover(from,'休眠唤醒')})}
+ async recover(from,reason){
+  const project=await this.project(),due=claimRecoveredSlots(this.data.tasks.filter(t=>t.project===project),from,this.now());
+  // Persist claimed deadlines before launching; a crash cannot replay a backlog.
+  await this.persist();
+  for(const [index,task] of due.entries()){const record=await this.launch(task,false,index?'本次恢复已尝试一个任务，等待后续计划':'');record.recovery=reason;if(!record.message)record.message=reason+'：已合并错过的触发，仅检查当前状态。';await this.persist()}
+ }
+ async initialize(){try{this.data=JSON.parse(await fs.readFile(this.file,'utf8'));if(!Array.isArray(this.data.tasks)||!Array.isArray(this.data.runs))throw Error('invalid');this.data.notices??=[];if(!Array.isArray(this.data.notices)||this.data.notices.length>1000||this.data.notices.some(k=>typeof k!=='string'||!/^[a-f0-9]{64}$/.test(k)))throw Error('invalid notices');for(const t of this.data.tasks){const {project,lastSlot,nextDue,threadId,...input}=t;validateTask(input);if(threadId!==undefined&&(typeof threadId!=='string'||!threadId))throw Error('invalid thread');t.threadId=threadId??this.data.runs.findLast(r=>r.taskId===t.id&&r.project===t.project&&r.threadId)?.threadId;if(t.frequency==='cron')t.nextDue=nextCron(t,this.now());if(t.frequency==='interval')t.nextDue=this.now().getTime()+t.intervalSeconds*1000}}catch(e){if(e.code!=='ENOENT')throw Error('无法读取定时任务，请检查存储文件。')}
  for(const r of this.data.runs)if(['starting','running','waiting'].includes(r.status)){r.status='interrupted';r.message='应用已退出，任务未自动重试';r.finishedAt=this.now().toISOString()}
  await this.persist();this.timer=setInterval(()=>{void this.tick().catch(e=>{this.error=e.message;this.publish()})},1000);
  }
  locked(fn){const p=this.chain.then(fn);this.chain=p.catch(()=>{});return p}
  async persist(){await fs.mkdir(path.dirname(this.file),{recursive:true});await fs.writeFile(this.file+'.pending',JSON.stringify(this.data,null,2));await replaceSchedulerFile(this.file+'.pending',this.file);this.publish()}
  async list(){await this.chain;const project=await this.project();return {tasks:this.data.tasks.filter(t=>t.project===project).map(t=>({...t,nextDue:nextTaskDue(t,this.now())})),runs:this.data.runs.filter(r=>r.project===project).slice(-60).reverse(),error:this.error}}
- save(input){return this.locked(async()=>{const t=validateTask(input),project=await this.project();let old;if(t.id){old=this.data.tasks.find(x=>x.id===t.id&&x.project===project);if(!old)throw Error('任务不存在。')}else if(this.data.tasks.length>=100)throw Error('最多保存 100 个定时任务。');const task={...t,id:old?.id??randomUUID(),project,...(old?.threadId?{threadId:old.threadId}:{}),lastSlot:old?.lastSlot??scheduleSlot(t,this.now()),...(t.frequency==='cron'?{nextDue:old?.frequency==='cron'&&old.cron===t.cron&&old.timezone===t.timezone&&old.enabled===t.enabled?old.nextDue:nextCron(t,this.now())}:{}),...(t.frequency==='interval'?{nextDue:old?.frequency==='interval'&&old.intervalSeconds===t.intervalSeconds&&old.enabled===t.enabled?old.nextDue:this.now().getTime()+t.intervalSeconds*1000}:{})};if(old)this.data.tasks[this.data.tasks.indexOf(old)]=task;else this.data.tasks.push(task);await this.persist();return task})}
+ save(input){return this.locked(async()=>{const t=validateTask(input),project=await this.project();let old;if(t.id){old=this.data.tasks.find(x=>x.id===t.id&&x.project===project);if(!old)throw Error('任务不存在。')}else if(this.data.tasks.length>=100)throw Error('最多保存 100 个定时任务。');const task={...t,notifyEnabled:t.notifyEnabled??old?.notifyEnabled??false,id:old?.id??randomUUID(),project,...(old?.threadId?{threadId:old.threadId}:{}),lastSlot:old?.lastSlot??scheduleSlot(t,this.now()),...(t.frequency==='cron'?{nextDue:old?.frequency==='cron'&&old.cron===t.cron&&old.timezone===t.timezone&&old.enabled===t.enabled?old.nextDue:nextCron(t,this.now())}:{}),...(t.frequency==='interval'?{nextDue:old?.frequency==='interval'&&old.intervalSeconds===t.intervalSeconds&&old.enabled===t.enabled?old.nextDue:this.now().getTime()+t.intervalSeconds*1000}:{})};if(old)this.data.tasks[this.data.tasks.indexOf(old)]=task;else this.data.tasks.push(task);await this.persist();return task})}
  remove(id){return this.locked(async()=>{const project=await this.project();const i=this.data.tasks.findIndex(t=>t.id===id&&t.project===project);if(i<0)throw Error('任务不存在。');this.data.tasks.splice(i,1);await this.persist();return {deleted:true}})}
- async tick(){return this.locked(async()=>{if(this.stopped)return;const now=this.now(),project=await this.project();for(const task of this.data.tasks){if(!task.enabled||task.project!==project)continue;if(task.frequency==='cron'){if(now.getTime()<task.nextDue)continue;const missed=now.getTime()-task.nextDue>2000;task.nextDue=nextCron(task,now);if(missed){await this.persist();continue}await this.launch(task,false);continue}if(task.frequency==='interval'){const period=task.intervalSeconds*1000;if(now.getTime()<task.nextDue)continue;const missed=now.getTime()-task.nextDue>=period;task.nextDue=now.getTime()+period;if(missed){await this.persist();continue}await this.launch(task,false);continue}const slot=scheduleSlot(task,now);if(!slot||slot===task.lastSlot)continue;task.lastSlot=slot;if(Math.floor(now.getTime()/60000)<=Math.floor(this.startedAt/60000)){await this.persist();continue}await this.launch(task,false)}})}
+ async tick(){return this.locked(async()=>{if(this.stopped||this.suspendedAt)return;if(!this.online()){this.offlineAt=this.offlineAt??this.now();return}if(this.offlineAt){const from=this.offlineAt;this.offlineAt=null;await this.recover(from,'网络恢复');return}const now=this.now(),project=await this.project();for(const task of this.data.tasks){if(!task.enabled||task.project!==project)continue;if(task.frequency==='cron'){if(now.getTime()<task.nextDue)continue;const missed=now.getTime()-task.nextDue>2000;task.nextDue=nextCron(task,now);if(missed){await this.persist();continue}await this.launch(task,false);continue}if(task.frequency==='interval'){const period=task.intervalSeconds*1000;if(now.getTime()<task.nextDue)continue;const missed=now.getTime()-task.nextDue>=period;task.nextDue=now.getTime()+period;if(missed){await this.persist();continue}await this.launch(task,false);continue}const slot=scheduleSlot(task,now);if(!slot||slot===task.lastSlot)continue;task.lastSlot=slot;if(Math.floor(now.getTime()/60000)<=Math.floor(this.startedAt/60000)){await this.persist();continue}await this.launch(task,false)}})}
  runNow(id){return this.locked(async()=>{const project=await this.project(),task=this.data.tasks.find(t=>t.id===id&&t.project===project);if(!task)throw Error('任务不存在。');return this.launch(task,true)})}
- async launch(task,manual){
+ async launch(task,manual,forcedBlock=''){
  if(this.stopped)throw Error('调度已停止。');
  const blockingRun=this.data.runs.findLast(r=>['starting','running','waiting'].includes(r.status));
- const blocked=!this.canRun()||!!blockingRun;
+ const blocked=!!forcedBlock||!this.online()||!this.canRun()||!!blockingRun;
  const other=this.blocker();
  const blockingThreadId=blockingRun?.threadId??other?.threadId;
- const blockedMessage=blockingRun?.status==='waiting'?'上一轮正在等待批准或回答':blockingRun?'上一轮尚未结束':other?.message??'Codex 正在处理其他会话或连接操作';
+ const blockedMessage=forcedBlock||(!this.online()?'网络不可用':blockingRun?.status==='waiting'?'上一轮正在等待批准或回答':blockingRun?'上一轮尚未结束':other?.message??'Codex 正在处理其他会话或连接操作');
 
  const record={id:randomUUID(),taskId:task.id,name:task.name,project:task.project,startedAt:this.now().toISOString(),status:blocked?'skipped':'starting',message:blocked?blockedMessage+'，本次跳过':'',threadId:null,...(blocked&&blockingThreadId?{blockingThreadId}:{})};this.data.runs.push(record);this.data.runs=this.data.runs.slice(-300);await this.persist();if(blocked)return record;
  try{await this.run(task,async id=>{task.threadId=id;record.threadId=id;record.status='running';await this.persist()});}
