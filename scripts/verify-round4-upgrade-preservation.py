@@ -30,10 +30,18 @@ trees={'project':compare_tree(backup/'active-project',pathlib.Path(binding['acti
 for name in ('credentials','research-codex/sessions','research-codex/archived_sessions','Local Storage'):
     trees[name]=compare_tree(backup/'app-data'/name,source/name)
 files={}
-for name in ('project-data.json','scheduler.json','research-codex/config.toml'):
+for name in ('project-data.json','research-auth-mode.json','scheduler.json','copilot-policy.json','stock-tools.json','browser-tools.json','research-codex/config.toml'):
     old=backup/'app-data'/name;new=source/name
     if old.exists():files[name]=new.exists() and hashlib.sha256(old.read_bytes()).digest()==hashlib.sha256(new.read_bytes()).digest()
 record={'stage':stage,'offlineComparison':True,'integrity':integrity,'tables':tables,'trees':trees,'configurationFiles':files}
-record['passed']=integrity and all(v['matches'] for v in tables.values()) and all(v['missing']==0 and v['changed']==0 for v in trees.values()) and all(files.values())
+if stage=='after':
+    live=json.loads((root/'validation/round4-installed-after.json').read_text(encoding='utf-8'))
+    record['layoutSemanticsPreserved']=live.get('layoutPreserved') is True and live.get('version')=='0.2.0-beta.3'
+    record['accountUsable']=live.get('observed',{}).get('usageState')=='ready'
+    # Chromium rewrites LevelDB files during normal startup. Compare actual saved
+    # layout values through the installed renderer rather than these storage files.
+    durable=[v for k,v in trees.items() if k!='Local Storage']
+else:durable=list(trees.values())
+record['passed']=integrity and all(v['matches'] for v in tables.values()) and all(v['missing']==0 and v['changed']==0 for v in durable) and all(files.values()) and (stage!='after' or record['layoutSemanticsPreserved'] and record['accountUsable'])
 (root/f'validation/round4-preservation-{stage}.json').write_text(json.dumps(record,indent=2)+'\n')
 print(json.dumps(record));sys.exit(0 if record['passed'] else 1)

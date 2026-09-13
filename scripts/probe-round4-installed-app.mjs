@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {extractFile} from '@electron/asar';
 import {chromium} from 'playwright';
 const root=path.join(process.env.LOCALAPPDATA,'Programs/Stock Loom');
+const stage=process.argv[2]??'a';if(!['a','after'].includes(stage))throw Error('Unknown stage');
 const binary=path.join(root,'Stock Loom.exe');
 const version=JSON.parse(extractFile(path.join(root,'resources/app.asar'),'package.json').toString()).version;
 const server=net.createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;await new Promise(r=>server.close(r));
@@ -26,8 +27,15 @@ try{
  });
  const layout=observed.layout;delete observed.layout;
  record.observed=observed;record.layoutSha256=createHash('sha256').update(JSON.stringify(layout)).digest('hex');
- await fs.writeFile('.runtime/round4-installed-layout-before.json',JSON.stringify(layout));
- record.passed=observed.current===version&&observed.holdingsCount>0&&observed.watchlistCount>0&&observed.usageState==='ready';
- record.screenshot=path.resolve('.runtime/round4-installed-a.png');await page.screenshot({path:record.screenshot});
+ if(stage==='a')await fs.writeFile('.runtime/round4-installed-layout-before.json',JSON.stringify(layout));
+ else{
+  const before=JSON.parse(await fs.readFile('.runtime/round4-layout-before-install.json','utf8'));
+  const after=await page.evaluate(()=>Object.fromEntries(Object.keys(localStorage).sort().filter(k=>k.startsWith('stock')).map(k=>[k,localStorage.getItem(k)])));
+  record.layoutPreserved=JSON.stringify(before)===JSON.stringify(after);
+  const copilot=await page.evaluate(async()=>{const models=await window.stock.copilotModels();const history=await window.stock.copilotList();return {modelCount:models.data.length,historyCount:history.data.length}});
+  record.copilot=copilot;
+ }
+ record.passed=observed.current===version&&version===(stage==='a'?'0.2.0-beta.2':'0.2.0-beta.3')&&observed.holdingsCount>0&&observed.watchlistCount>0&&observed.usageState==='ready'&&(stage==='a'||record.layoutPreserved&&record.copilot.modelCount>0);
+ record.screenshot=path.resolve(`.runtime/round4-installed-${stage}.png`);await page.screenshot({path:record.screenshot});
 }catch(error){record.error=error.message;process.exitCode=1}
-finally{await browser?.close();await fs.writeFile('validation/round4-installed-a.json',JSON.stringify(record,null,2));console.log(JSON.stringify(record))}
+finally{await browser?.close();await fs.writeFile(`validation/round4-installed-${stage}.json`,JSON.stringify(record,null,2));console.log(JSON.stringify(record))}

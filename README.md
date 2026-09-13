@@ -6,7 +6,7 @@
 
 [查看发行版本](https://github.com/CrxzyChen/stock-loom/releases) · [版本说明](docs/beta-release.md) · [使用指南](USER-GUIDE.md) · [参与开发](CONTRIBUTING.md) · [数据源扩展](DATA-SOURCES.md) · [兼容与恢复](COMPATIBILITY.md)
 
-已发布 [0.2.0-beta.2 预览版](https://github.com/CrxzyChen/stock-loom/releases/tag/v0.2.0-beta.2)，包含 Round 4 新功能。完整应用内升级与数据保留验收仍在进行，尚未宣布 Round 4 全部完成。
+已发布 [0.2.0-beta.3 预览版](https://github.com/CrxzyChen/stock-loom/releases/tag/v0.2.0-beta.3)，包含 Round 4 新功能。完整应用内升级与数据保留验收仍在进行，尚未宣布 Round 4 全部完成。
 
 ## 能做什么
 
