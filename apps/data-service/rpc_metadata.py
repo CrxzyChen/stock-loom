@@ -3,7 +3,7 @@ import hashlib
 import json
 import re
 
-def response_metadata(method, result, *, research_context=None):
+def response_metadata(method, result):
     dates=set();sources=set()
     def date(value):
         if isinstance(value,str) and re.fullmatch(r'[0-9]{8}',value):dates.add(value)
@@ -11,29 +11,11 @@ def response_metadata(method, result, *, research_context=None):
         if isinstance(value,str) and value:sources.add(kind+':'+value)
     def snapshot(item):
         source('snapshot',item.get('snapshotId') or item.get('id'));date(item.get('asOf'))
-    def context(value):
-        source('research',value.get('runId'))
-        for fact in value.get('facts',[]):
-            date(fact.get('date'));source('snapshot',fact.get('snapshotId'))
-    def recap(value):
-        date(value.get('date'))
-        for item in value.get('items',[]):source('snapshot',item.get('snapshotId'))
     if isinstance(result,dict):
         if method in ('reference.read','reference.sync','bars.read','bars.sync','financials.sync','breadth.read','sectors.read','sectors.summary','sector.history'):snapshot(result)
         elif method=='financials.read' and result.get('manifest'):snapshot(result['manifest'])
         elif method in ('screen.run','screen.page','screen.latest'):
             date(result.get('date'));source('screen',result.get('resultId'))
-        elif method in ('research.prepare','research.context'):context(result)
-        elif method in ('research.save','research.report'):context(result['context'])
-        elif method in ('research.export','research.draft.save','research.draft.read') and research_context is not None:context(research_context)
-        elif method=='research.chart':
-            date(result.get('asOf'));source('snapshot',result.get('snapshotId'));source('chart',result.get('artifactId'))
-        elif method=='recap.latest':recap(result)
-        elif method=='recap.generate' and result.get('report'):recap(result['report'])
-        elif method in ('recap.modelPrepare','recap.modelContext'):
-            date(result['input'].get('date'));source('recap-context',result.get('contextId'))
-        elif method in ('recap.modelPublish','recap.modelLatest'):
-            date(result.get('date'));source('recap-context',result.get('contextId'))
     elif isinstance(result,list) and method in ('bars.versions','financials.snapshots'):
         for item in result:snapshot(item)
     # Heterogeneous dates are not collapsed into a misleading single as-of date.

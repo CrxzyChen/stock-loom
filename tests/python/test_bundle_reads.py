@@ -81,16 +81,12 @@ class BundleReadTests(unittest.TestCase):
         self.assertEqual(result['000001.SZ'][-1]['adjustedClose'],20)
         self.assertEqual(result['000002.SZ'][-1]['adjustedClose'],20)
 
-    def test_backup_restore_preserves_bundled_prices_watchlist_report_and_screen(self):
+    def test_backup_restore_preserves_bundled_prices_watchlist_and_screen(self):
         self.convert_fixture()
         group=self.store.create_list({'name':'合并快照恢复'})
         self.store.change_member({'listId':group['id'],'instrumentId':'000001.SZ'},True)
-        context=self.store.prepare_research({'instrumentIds':['000001.SZ'],'question':'synthetic bundle restore'})
-        key={'runId':context['runId']};self.store.start_research(key)
-        self.store.save_report({**key,'report':{'summary':'合成合并快照报告','claims':[],'limitations':['仅测试']},'model':'fixture','threadId':'fixture','usage':{'input_tokens':1,'cached_input_tokens':0,'output_tokens':1}})
         screen=self.store.run_screen({'date':'20240103','conditions':[{'field':'price','operator':'gt','value':0}],'sort':'id','direction':'asc'})
         expected={mode:self.page(mode) for mode in ('none','forward','backward')}
-        report=self.store.read_report(key)
         backup=self.store.create_backup({})
         with zipfile.ZipFile(backup['path']) as archive:
             self.assertEqual(sum(name.endswith('/data.json') for name in archive.namelist()),1)
@@ -101,7 +97,6 @@ class BundleReadTests(unittest.TestCase):
             for mode,value in expected.items():
                 self.assertEqual(candidate.read_bars({'snapshotId':self.id,'adjustment':mode,'offset':0}),value)
             self.assertEqual(candidate.latest_screen({}),screen)
-            self.assertEqual(candidate.read_report(key),report)
             self.assertEqual(candidate.members({'listId':group['id']})[0]['id'],'000001.SZ')
             self.assertEqual(candidate.run_screen({'date':'20240103','conditions':[{'field':'price','operator':'gt','value':0}],'sort':'id','direction':'asc'}),screen)
         finally:candidate.close()
@@ -154,44 +149,6 @@ class BundleReadTests(unittest.TestCase):
         self.assertEqual(caught.exception.code,'INVALID_BACKUP')
         self.assertEqual(self.page('none')['items'][-1]['close'],10)
 
-    def test_legacy_schema_five_backup_restores_and_migrates(self):
-        # Schema 6 changes storage interpretation, not SQL columns. Build an
-        # isolated format-5 archive containing only traditional snapshots.
-        backup=self.store.create_backup({})
-        with zipfile.ZipFile(backup['path']) as source:
-            content={name:source.read(name) for name in source.namelist()}
-        database=self.store.root/'backups'/'legacy-five.sqlite';database.write_bytes(content['stock.sqlite'])
-        connection=sqlite3.connect(database)
-        try:
-            # This copied synthetic archive must actually have the legacy SQL
-            # shape; changing only user_version would create an invalid fixture.
-            for table in ('cash_events','cash_requests','ledger_events','ledger_accounts','ledger_requests','ledger_opening_sources'):
-                connection.execute('DROP TABLE '+table)
-            connection.execute('DROP TABLE holdings')
-            connection.execute('DROP TABLE job_events')
-            connection.execute('DROP TABLE job_attempts')
-            connection.execute('DROP INDEX jobs_state_retry')
-            for column in ('profile_id','attempt','generation','input_snapshot','started_at','finished_at','retry_at','artifact_ids'):
-                connection.execute('ALTER TABLE jobs DROP COLUMN '+column)
-            connection.execute("DELETE FROM settings WHERE key='profile-id'")
-            connection.execute('PRAGMA user_version=5');connection.commit()
-        finally:connection.close()
-        content['stock.sqlite']=database.read_bytes()
-        manifest=json.loads(content['backup-manifest.json']);manifest['schemaVersion']=5
-        for entry in manifest['files']:
-            if entry['path']=='stock.sqlite':
-                entry['sha256']=hashlib.sha256(content['stock.sqlite']).hexdigest();entry['size']=len(content['stock.sqlite'])
-        content['backup-manifest.json']=json.dumps(manifest).encode('utf8')
-        archive=self.store.root/'backups'/'legacy-five.stockbackup'
-        with zipfile.ZipFile(archive,'w') as target:
-            for name,raw in content.items():target.writestr(name,raw)
-        result=self.store.restore_backup({'archive':str(archive)})
-        restored=Store(self.store.root.parent/result['directory'])
-        try:
-            self.assertEqual(restored.overview()['schemaVersion'],10)
-            self.assertEqual(restored.read_bars({'snapshotId':self.id,'adjustment':'forward','offset':0}),self.page('forward'))
-            self.assertTrue(any(p.name.startswith('pre-schema-6-') for p in (restored.root/'backups').iterdir()))
-        finally:restored.close()
 
 
 if __name__=='__main__':unittest.main()

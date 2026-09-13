@@ -1,13 +1,12 @@
 import pathlib,sys,tempfile,unittest
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[2]/'apps/data-service'))
 from main import Store
-from position_ledger import PositionLedger,migrate_position_ledger
 from provider import ProviderError
 LedgerStore=Store
 class LedgerWriteTests(unittest.TestCase):
  def setUp(self):
   root=pathlib.Path(__file__).resolve().parents[2]/'.runtime/tests';root.mkdir(parents=True,exist_ok=True)
-  self.s=LedgerStore(tempfile.mkdtemp(prefix='ledger-write-',dir=root));self.s.db.execute("INSERT INTO instruments(id,name,exchange,list_status) VALUES ('000001.SZ','fixture','SZSE','L')");self.s.db.commit();migrate_position_ledger(self.s.db,self.s.root)
+  self.s=LedgerStore(tempfile.mkdtemp(prefix='ledger-write-',dir=root));self.s.db.execute("INSERT INTO instruments(id,name,exchange,list_status) VALUES ('000001.SZ','fixture','SZSE','L')");self.s.db.commit()
  def tearDown(self):self.s.close()
  def request(self,key,revision,kind='buy',qty=100,price='10',date='2024-01-01',parent=None,void=False):return dict(instrumentId='000001.SZ',requestId=key,revision=revision,event=None if void else dict(kind=kind,date=date,quantity=qty,price=price,fee='0'),supersedes=parent,voided=void)
  def test_retry_conflict_and_holdings_projection(self):

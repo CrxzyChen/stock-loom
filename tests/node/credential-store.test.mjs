@@ -9,15 +9,15 @@ async function fixture(storage){await fs.mkdir(base,{recursive:true});const dire
 test('unavailable encryption keeps secrets only in session and clears them',async()=>{
   const {vault,directory}=await fixture({isEncryptionAvailable:()=>false});
   assert.deepEqual(await vault.saveToken(secret),{configured:true,encrypted:false});
-  await vault.saveModel({model:'test-model',apiKey:secret});
-  assert.equal(await vault.readToken(),secret);assert.equal((await vault.readModel()).apiKey,secret);
+  await vault.saveProvider({name:'Test',baseUrl:'https://example.com/v1',model:'test-model',apiKey:secret});
+  assert.equal(await vault.readToken(),secret);assert.equal((await vault.readProvider()).apiKey,secret);
   assert.deepEqual(await fs.readdir(directory),[]);
-  vault.clearSession();assert.equal((await vault.tokenStatus()).configured,false);assert.equal((await vault.modelStatus()).configured,false);
+  vault.clearSession();assert.equal((await vault.tokenStatus()).configured,false);assert.equal((await vault.providerStatus()).configured,false);
 });
 test('invalid input never reaches encryption and concurrent token saves cannot share pending file',async()=>{
   let encrypted=0;
   const {vault}=await fixture({isEncryptionAvailable:()=>true,encryptString:value=>{encrypted++;return Buffer.from(value)},decryptString:value=>value.toString()});
-  await assert.rejects(vault.saveToken('short'));await assert.rejects(vault.saveModel({model:'bad model',apiKey:secret}));assert.equal(encrypted,0);
+  await assert.rejects(vault.saveToken('short'));await assert.rejects(vault.saveProvider({name:'Test',baseUrl:'https://example.com/v1',model:'bad model',apiKey:secret}));assert.equal(encrypted,0);
   const first=vault.saveToken(secret);await assert.rejects(vault.saveToken(secret+'second'),/正在保存/);await first;
   assert.equal(await vault.readToken(),secret);assert.equal(encrypted,1);
 });

@@ -50,35 +50,6 @@ def ledger_balance(events):
         average=None if basis is None else (basis/quantity if quantity else Decimal(0))
         return {'quantity':quantity,'costBasis':money(basis),'averageCost':None if average is None else format(average.quantize(Decimal('.00000001'),rounding=ROUND_HALF_UP),'f'),'realizedProfit':money(realized)}
 
-def migrate_position_ledger(db,root):
-    """Schema 8 -> 9 with backup and an atomic opening-balance migration."""
-    import json,sqlite3,uuid
-    from pathlib import Path
-    version=db.execute('PRAGMA user_version').fetchone()[0]
-    if version>=9:return None
-    if version!=8 or db.in_transaction:raise ProviderError('INVALID_STATE','账本迁移需要已提交的版本8数据库。')
-    backup_path=Path(root)/'backups'/('pre-schema-9-'+str(uuid.uuid4())+'.sqlite')
-    backup=sqlite3.connect(backup_path)
-    try:db.backup(backup)
-    finally:backup.close()
-    try:
-        db.execute('BEGIN IMMEDIATE')
-        db.execute('CREATE TABLE ledger_opening_sources AS SELECT * FROM holdings')
-        db.execute('CREATE TABLE ledger_requests(request_id TEXT PRIMARY KEY,request TEXT NOT NULL,response TEXT NOT NULL)')
-        db.execute('CREATE TABLE ledger_accounts(instrument_id TEXT PRIMARY KEY REFERENCES instruments(id),revision INTEGER NOT NULL)')
-        db.execute('''CREATE TABLE ledger_events(id TEXT PRIMARY KEY,instrument_id TEXT NOT NULL REFERENCES instruments(id),event_date TEXT NOT NULL,
-          payload TEXT NOT NULL,supersedes TEXT UNIQUE REFERENCES ledger_events(id),voided INTEGER NOT NULL DEFAULT 0 CHECK(voided IN (0,1)),
-          idempotency_key TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL,source TEXT NOT NULL)''')
-        for row in db.execute('SELECT instrument_id,quantity,cost_price,as_of,revision,updated_at FROM holdings').fetchall():
-            code,quantity,cost,date,revision,updated=row
-            event={'kind':'opening','date':date,'quantity':quantity,'price':cost}
-            ledger_balance([event])
-            db.execute('INSERT INTO ledger_accounts VALUES (?,?)',(code,revision))
-            db.execute('INSERT INTO ledger_events VALUES (?,?,?,?,NULL,0,?,?,?)',('opening:'+code,code,date,json.dumps(event,ensure_ascii=False),'migration:'+code,updated,'legacy-opening'))
-        db.execute('PRAGMA user_version=9');db.commit()
-    except BaseException:
-        db.rollback();raise
-    return str(backup_path)
 
 class PositionLedger:
     def ledger_events(self,code):

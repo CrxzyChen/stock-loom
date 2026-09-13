@@ -15,8 +15,7 @@ import {NativeMcpConfig} from './native-mcp-config.mjs';
 import {NativeConfig} from './native-config.mjs';
 import {readStockTools,saveStockTools,stockToolsStatus,openStockTools} from './stock-tools-settings.mjs';
 import {readWindowZoom,saveWindowZoom} from './window-view.mjs';
-import {rejectRetiredOperation} from './legacy-entrypoints.mjs';
-import {app,BrowserWindow,ipcMain,Menu,safeStorage,utilityProcess,dialog,Tray,nativeImage,Notification,powerMonitor,nativeTheme,shell,net} from 'electron';
+import {app,BrowserWindow,ipcMain,Menu,safeStorage,dialog,Tray,nativeImage,Notification,powerMonitor,nativeTheme,shell,net} from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -30,16 +29,9 @@ import {ProjectData} from './project-data.mjs';
 import {CredentialStore} from './credential-store.mjs';
 import {providerOptions} from './model-provider.mjs';
 import {checkProvider} from './provider-check.mjs';
-import {ResearchController} from './research-controller.mjs';
-import {RunToolBroker} from '../../../agent-host/tool-broker.mjs';
-import {WorkspaceToolBroker} from '../../../agent-host/workspace-tool-broker.mjs';
-import {startToolPipe} from '../../../agent-host/pipe-server.mjs';
 import {switchProfile} from './profiles.mjs';
 import {startupProfile} from './startup-profile.mjs';
 import {DesktopPresence} from './desktop-presence.mjs';
-import {RecapScheduler} from './recap-scheduler.mjs';
-import {ModelRecapController} from './model-recap-controller.mjs';
-import {recapQuote,recapPricing} from '../../../agent-host/recap-runtime.mjs';
 import {AutoSyncScheduler} from './autosync-scheduler.mjs';
 import {UpdateController} from './update-controller.mjs';
 import {verifyInstallerPublisher} from './installer-signature.mjs';
@@ -60,20 +52,18 @@ async function saveCloseBehavior(value:string){
 }
 let service:ServiceClient;
 let processGuard:ProcessGuard;
-let research:ResearchController;
 let codexAccount:CodexAccount;
 let codexSandbox:CodexSandbox;
 let copilot:CopilotWorkspace;
 let projectData:ProjectData;
 const projectFiles=new ProjectFiles(()=>copilot.location());
-let researchAuthMode:'chatgpt'|'api'|'custom'='chatgpt';
+let researchAuthMode:'chatgpt'|'custom'='chatgpt';
 let accountChanging=false;
 let accountOperation:Promise<any>|null=null;
 const authPreference=()=>path.join(app.getPath('userData'),'research-auth-mode.json');
 async function accountChange(fn:()=>Promise<any>,wait=false):Promise<any>{
   if(wait&&accountOperation)await accountOperation.catch(()=>{});
   if(accountChanging)throw Error('正在更新连接设置，请稍后重试。');
-  if(research?.status())throw Error('研究仍在进行，请结束后切换连接。');
   accountChanging=true;
   const operation=(async()=>{
     try{
@@ -87,8 +77,6 @@ async function accountChange(fn:()=>Promise<any>,wait=false):Promise<any>{
   accountOperation=operation;
   try{return await operation}finally{if(accountOperation===operation)accountOperation=null}
 }
-let modelRecap:ModelRecapController;
-let modelRecapConfiguring=false;
 let presence:DesktopPresence;
 let updates:UpdateController;
 const accountUsage=new AccountUsage({mode:()=>accountChanging?'changing':researchAuthMode,read:async()=>{await codexAccount.start();const account=await codexAccount.request('account/read',{refreshToken:false});if(account?.account?.type!=='chatgpt')throw Object.assign(Error('ChatGPT account unavailable'),{code:'ACCOUNT_NOT_LOGGED_IN'});return codexAccount.request('account/rateLimits/read',{excludeResetCreditDetails:true})}});
@@ -101,10 +89,9 @@ function serviceStatus(){return {...service.status,maintenance}}
 function publishServiceStatus(){if(window&&!window.isDestroyed())window.webContents.send('stock:service:changed',serviceStatus())}
 function setMaintenance(value:boolean){maintenance=value;publishServiceStatus()}
 let maintenanceDone=Promise.resolve();
-let recapTimer:ReturnType<typeof setInterval>|undefined;
-let recapScheduler:RecapScheduler;
+let autoSyncTimer:ReturnType<typeof setInterval>|undefined;
 let autoSync:AutoSyncScheduler;
-async function tickRecap(){await autoSync?.tick()}
+async function tickAutoSync(){await autoSync?.tick()}
 const devUrl=!app.isPackaged&&process.env.STOCK_DEV_URL==='http://127.0.0.1:5173'?process.env.STOCK_DEV_URL:null;
 const html=path.resolve(__dirname,'../renderer/index.html');
 const rendererUrl=devUrl??pathToFileURL(html).href;
@@ -112,8 +99,6 @@ const root=path.resolve(__dirname,'../..');
 // Keep pre-Alpha profiles and encrypted credentials after the public rename.
 if(['stock-workshop','stock loom','stock-loom','stock workshop'].includes(path.basename(app.getPath('userData')).toLowerCase()))app.setPath('userData',path.join(app.getPath('appData'),'stock-workshop'));
 const credentialStore=new CredentialStore({safeStorage,directory:()=>path.join(app.getPath('userData'),'credentials')});
-const modelConfig=()=>credentialStore.readModel();
-function runKey(p:any){if(!p||Object.keys(p).join(',')!=='runId'||typeof p.runId!=='string'||! /^[a-f0-9-]{36}$/.test(p.runId))throw Error('研究 ID 无效。');return p}
 
 function validSender(event:Electron.IpcMainInvokeEvent){
   if(!window||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame)throw Error('拒绝来自未知窗口的请求。');
@@ -121,7 +106,7 @@ function validSender(event:Electron.IpcMainInvokeEvent){
   if(devUrl){if(!url||new URL(url).origin!==devUrl)throw Error('拒绝来自未知页面的请求。')}
   else if(url!==rendererUrl)throw Error('拒绝来自未知页面的请求。');
 }
-function handle(name:string,fn:(params:any)=>unknown){ipcMain.handle(name,async(event,params)=>{validSender(event);if(accountChanging&&['stock:copilot:list','stock:copilot:read','stock:copilot:create','stock:copilot:send','stock:copilot:tools','stock:copilot:models','stock:copilot:goal'].includes(name))throw Error('正在切换连接，请稍后重试。');if(maintenance&&!['stock:service:status','stock:update:status'].includes(name))throw Error('正在维护本地资料，请等待完成。');try{rejectRetiredOperation(name,params);return await fn(params)}catch(error){if(error instanceof ServiceRpcError)throw Error(`${error.message}\n请求标识：${error.requestId}`);throw error}})}
+function handle(name:string,fn:(params:any)=>unknown){ipcMain.handle(name,async(event,params)=>{validSender(event);if(accountChanging&&['stock:copilot:list','stock:copilot:read','stock:copilot:create','stock:copilot:send','stock:copilot:tools','stock:copilot:models','stock:copilot:goal'].includes(name))throw Error('正在切换连接，请稍后重试。');if(maintenance&&!['stock:service:status','stock:update:status'].includes(name))throw Error('正在维护本地资料，请等待完成。');try{return await fn(params)}catch(error){if(error instanceof ServiceRpcError)throw Error(`${error.message}\n请求标识：${error.requestId}`);throw error}})}
 function noParams(params:unknown){if(params!==undefined)throw Error('此操作不接受参数。')}
 const credentials=()=>credentialStore.tokenStatus();
 const saveToken=(params:unknown)=>credentialStore.saveToken(params);
@@ -186,9 +171,9 @@ function registerIPC(){
   handle('stock:project:write',p=>{if(!p||Object.keys(p).sort().join(',')!=='path,revision,text')throw Error('保存参数无效。');return projectFiles.write(p.path,p.text,p.revision)});
   handle('stock:copilot:project',p=>{noParams(p);return copilot.location()});
   handle('stock:copilot:select',async p=>{
-    noParams(p);if(projectFiles.writing.size||diagnosing||research.status()||modelRecap.active||copilot.busy())throw Error('请等待当前数据、文件或 Codex 操作完成后切换项目。');
+    noParams(p);if(projectFiles.writing.size||diagnosing||copilot.busy())throw Error('请等待当前数据、文件或 Codex 操作完成后切换项目。');
     setMaintenance(true);let finish!:()=>void;maintenanceDone=new Promise<void>(resolve=>{finish=resolve});
-    try{await autoSync.pending;await recapScheduler.pending;
+    try{await autoSync.pending;
       const jobs=await service.call('jobs.list');if(jobs.some((j:any)=>['queued','running'].includes(j.state)))throw Error('请先完成或取消当前数据同步任务。');
       return await copilot.select();
     }finally{setMaintenance(false);finish()}
@@ -202,7 +187,7 @@ function registerIPC(){
   handle('stock:copilot:tools',async p=>{if(!p||Object.keys(p).sort().join(',')!=='cursor,threadId')throw Error('会话参数无效。');return (await copilot.connect()).tools(p.threadId,p.cursor)});
   handle('stock:copilot:create',async p=>{noParams(p);return (await copilot.connect()).create()});
   handle('stock:copilot:read',async p=>{if(!p||typeof p!=='object'||Object.keys(p).sort().join(',')!=='cursor,threadId')throw Error('会话参数无效。');return {...await (await copilot.connect()).read(p.threadId,p.cursor),pendingRequests:copilot.pending(p.threadId)}});
-  handle('stock:copilot:models',async()=> {if(researchAuthMode==='custom')return providerModelCatalog(await credentialStore.readProvider());if(researchAuthMode==='api'){const p=await modelConfig();return providerModelCatalog({name:'OpenAI',baseUrl:'https://api.openai.com/v1',model:p.model,apiKey:p.apiKey})}return (await copilot.connect()).models()});
+  handle('stock:copilot:models',async()=>researchAuthMode==='custom'?providerModelCatalog(await credentialStore.readProvider()):(await copilot.connect()).models());
   handle('stock:provider:models',async()=>providerModelCatalog(await credentialStore.readProvider()));
   handle('stock:copilot:attachments',async()=>{
     const project=(await copilot.location()).path;
@@ -226,16 +211,16 @@ function registerIPC(){
   handle('stock:profile:location',async p=>{noParams(p);const current=service.args.at(-1);return {path:current,migration:await migrationStatus(app.getPath('userData'),current)}});
   handle('stock:profile:migrate',async p=>{
     noParams(p);if(!window)throw Error('窗口不可用。');
-    if(quitting||diagnosing||modelRecapConfiguring||copilot?.busy())throw Error('请等待当前操作结束后迁移资料。');
+    if(quitting||diagnosing||copilot?.busy())throw Error('请等待当前操作结束后迁移资料。');
     setMaintenance(true);let finishMaintenance!:()=>void;
     maintenanceDone=new Promise<void>(resolve=>{finishMaintenance=resolve});
     try{
       const selection=await dialog.showOpenDialog(window,{title:'选择资料目标目录（原资料保留）',properties:['openDirectory']});
       if(selection.canceled||!selection.filePaths[0])return {completed:false};
-      await autoSync.pending;await recapScheduler.pending;await modelRecap.stop();await research.stop();
+      await autoSync.pending;
       const result=await migrateProfile(service,app.getPath('userData'),selection.filePaths[0]);
       await projectData.rebind(service);
-      recapScheduler.reset();autoSync.reset();
+      autoSync.reset();
       return result;
     }finally{setMaintenance(false);finishMaintenance()}
   });
@@ -262,7 +247,7 @@ function registerIPC(){
         const schema=(await service.call('overview')).schemaVersion;
         return installUpdate({
           validate:()=>validateCandidate({directory:path.join(app.getPath('userData'),'updates'),candidate,update,repo,current:app.getVersion(),schema,verify:(file:string)=>verifyInstallerPublisher(file,process.execPath,{allowUnsigned:true})}),
-          quiesce:async()=>{ready();await copilot.stop();await autoSync.pending;await recapScheduler.pending;await modelRecap.stop();await research.stop();await service.call('jobs.cancelAll')},
+          quiesce:async()=>{ready();await copilot.stop();await autoSync.pending;await service.call('jobs.cancelAll')},
           backup:()=>service.callToCompletion('backup.create'),
           stop:()=>service.stop(),restart:()=>service.start(),launch:launchInstaller,
           canLaunch:()=>{ready();return !quitting},onStage,
@@ -272,17 +257,6 @@ function registerIPC(){
       if(launched)setImmediate(()=>app.quit());
       return updates.status();
     }finally{setMaintenance(launched);finishMaintenance()}
-  });
-  handle('stock:recap:status',p=>{noParams(p);return {state:'stopped',message:'第一轮自动复盘已停用，历史资料保留。',checkedAt:null}});
-  handle('stock:recap:model:info',async p=>{noParams(p);let quote=null,priceError='';try{quote=recapQuote()}catch{priceError='价格记录已过期，请更新应用后再启用模型复盘。'}return {policy:await service.call('recap.modelPolicy'),usage:await service.call('recap.modelUsage'),attempt:await service.call('recap.modelAttempt'),status:modelRecap.status(),quote,priceError,model:recapPricing.model}});
-  handle('stock:recap:model:configure',async p=>{if(!p||Object.keys(p).sort().join(',')!=='dailyMicroUsd,dailyRequests,enabled'||modelRecapConfiguring)throw Error('预算设置无效或正在保存。');modelRecapConfiguring=true;try{if(p.enabled){recapQuote();await modelConfig()}await modelRecap.stop();return await service.call('recap.modelConfigure',p)}finally{modelRecapConfiguring=false}});
-  handle('stock:recap:model:start',async p=>{noParams(p);return modelRecap.start()});
-  handle('stock:recap:model:stop',async p=>{noParams(p);await modelRecap.stop();return modelRecap.status()});
-  handle('stock:recap:model:latest',async p=>{noParams(p);const result=await service.call('recap.modelLatest');if(!result)return null;const context=await service.call('recap.modelContext',{contextId:result.contextId});const ids=new Set(result.report.observations.flatMap((x:any)=>x.factIds));return {...result,facts:context.input.facts.filter((x:any)=>ids.has(x.id))}});
-  for(const operation of ['policy','configure','latest','generate'])handle('stock:recap:'+operation,p=>{
-    if(operation==='configure'){if(!p||Object.keys(p).join(',')!=='enabled'||typeof p.enabled!=='boolean')throw Error('复盘设置无效。')}
-    else noParams(p);
-    return service.call('recap.'+operation,p??{},operation==='generate'?120000:15000);
   });
   for(const operation of ['create','restore'])handle('stock:backup:'+operation,async p=>{
     noParams(p);if(!window)throw Error('窗口不可用。');
@@ -296,7 +270,7 @@ function registerIPC(){
         ?await dialog.showSaveDialog(window,{title:'保存本地备份',defaultPath:'Stock-'+new Date().toISOString().slice(0,10)+'.stockbackup',filters:[{name:'Stock 备份',extensions:['stockbackup']}]})
         :await dialog.showOpenDialog(window,{title:'恢复到新资料目录（原资料保留）',properties:['openFile'],filters:[{name:'Stock 备份',extensions:['stockbackup']}]});
       if(selection.canceled)return {completed:false};
-        await autoSync.pending;await recapScheduler.pending;await modelRecap.stop();await research.stop();
+        await autoSync.pending;
       if(operation==='create'){
         const backup=await service.callToCompletion('backup.create');
         const destination=(selection as Electron.SaveDialogReturnValue).filePath!;
@@ -307,26 +281,26 @@ function registerIPC(){
       await copilot.stop();
       await switchProfile(service,app.getPath('userData'),restored.directory);
       await projectData.rebind(service);
-        recapScheduler.reset();autoSync.reset();
+        autoSync.reset();
       presence.setEnabled((await service.call('overview')).settings.closeToTray);
       return {completed:true,originalPreserved:true};
     }finally{setMaintenance(false);finishMaintenance()}
   });
   handle('stock:storage:compact',async p=>{
     noParams(p);
-    if(diagnosing||research.status()||modelRecap.active)throw Error('请先结束数据同步、研究和模型复盘，再整理快照。');
+    if(diagnosing)throw Error('请先结束数据同步，再整理快照。');
     setMaintenance(true);
     let finishMaintenance!:()=>void;
     maintenanceDone=new Promise<void>(resolve=>{finishMaintenance=resolve});
     try{
-      await autoSync.pending;await recapScheduler.pending;
+      await autoSync.pending;
       return await service.callToCompletion('storage.compact');
     }finally{setMaintenance(false);finishMaintenance()}
   });
   handle('stock:copilot:policy:read',()=>readCopilotPolicy(app.getPath('userData')));
   handle('stock:copilot:policy:save',p=>accountChange(async()=>{const policy=await saveCopilotPolicy(app.getPath('userData'),p);window?.webContents.send('stock:copilot:event',{kind:'policyChanged',policy});return policy}));
   handle('stock:sandbox:status',p=>{noParams(p);return codexSandbox.status()});
-  handle('stock:sandbox:setup',p=>accountChange(async()=>{if(modelRecap?.active)throw Error('请等待当前 Codex 操作完成。');return codexSandbox.setup(p)}));
+  handle('stock:sandbox:setup',p=>accountChange(async()=>{return codexSandbox.setup(p)}));
   handle('stock:account:status',p=>{noParams(p);return {...codexAccount.snapshot(),mode:researchAuthMode}});
   const nativeMcp=()=>new NativeMcpConfig(codexAccount,()=>copilot.location());
   handle('stock:native-mcp:read',p=>{noParams(p);return nativeMcp().read()});
@@ -353,29 +327,10 @@ function registerIPC(){
   handle('stock:account:logout',p=>{noParams(p);return accountChange(()=>codexAccount.logout())});
   handle('stock:account:model',p=>accountChange(()=>codexAccount.select(p)));
   handle('stock:account:usage',p=>{noParams(p);return accountUsage.status()});
-  handle('stock:account:mode',p=>accountChange(async()=>{if(p!=='chatgpt'&&p!=='api'&&p!=='custom')throw Error('连接方式无效。');await codexAccount.cancel();await fs.writeFile(authPreference(),JSON.stringify(p));researchAuthMode=p;window?.webContents.send('stock:copilot:event',{kind:'modelsChanged'});return {...codexAccount.snapshot(),mode:researchAuthMode}},true));
+  handle('stock:account:mode',p=>accountChange(async()=>{if(p!=='chatgpt'&&p!=='custom')throw Error('连接方式无效。');await codexAccount.cancel();await fs.writeFile(authPreference(),JSON.stringify(p));researchAuthMode=p;window?.webContents.send('stock:copilot:event',{kind:'modelsChanged'});return {...codexAccount.snapshot(),mode:researchAuthMode}},true));
   handle('stock:provider:check',p=>{noParams(p);return accountChange(async()=>{const value=await credentialStore.readProvider(),cwd=path.join(app.getPath('userData'),'provider-check');await fs.mkdir(cwd,{recursive:true});const binary=codexAccount.binary,evidence=JSON.parse(await fs.readFile(codexAccount.evidencePath,'utf8'));return checkProvider({binary,binarySha256:evidence.binarySha256,home:codexAccount.home,cwd,protect:(child:any)=>processGuard.protect(child)},value)})});
   handle('stock:provider:status',p=>{noParams(p);return credentialStore.providerStatus()});
   handle('stock:provider:save',p=>accountChange(async()=>{const result=await credentialStore.saveProvider(p);window?.webContents.send('stock:copilot:event',{kind:'modelsChanged'});return result}));
-  handle('stock:model:status',p=>{noParams(p);return credentialStore.modelStatus()});
-  handle('stock:model:save',p=>accountChange(()=>credentialStore.saveModel(p)));
-  handle('stock:research:prepare',p=>{if(!p||Object.keys(p).sort().join(',')!=='instrumentIds,question,requestKey'||typeof p.requestKey!=='string'||! /^[A-Za-z0-9_-]{16,100}$/.test(p.requestKey)||JSON.stringify(p).length>20000)throw Error('研究参数无效。');return service.call('research.prepare',p,30000)});
-  handle('stock:research:events',p=>{if(!p||Object.keys(p).sort().join(',')!=='after,runId'||!Number.isSafeInteger(p.after)||p.after<0)throw Error('事件参数无效。');runKey({runId:p.runId});return service.call('research.events',p)});
-  handle('stock:research:start',p=>{if(researchAuthMode==='custom')throw Error('请在右侧 Codex 使用自定义服务。');if(modelRecap.active)throw Error('模型复盘正在运行，请先等待或停止。');return research.start(runKey(p).runId)});
-  handle('stock:research:cancel',p=>research.cancel(runKey(p).runId));
-  handle('stock:research:status',p=>{noParams(p);return research.status()});
-  handle('stock:research:list',p=>{if(!p||Object.keys(p).join(',')!=='offset'||!Number.isInteger(p.offset)||p.offset<0||p.offset>100000)throw Error('分页参数无效。');return service.call('research.list',p)});
-  handle('stock:research:report',async p=>{const {result,requestId,dataAsOf,sourceVersion}=await service.callWithMetadata('research.report',runKey(p));return {...result,provenance:{requestId,dataAsOf,sourceVersion}}});
-  handle('stock:research:context',p=>service.call('research.context',runKey(p)));
-  handle('stock:research:draft',p=>service.call('research.draft.read',runKey(p)));
-  handle('stock:research:chart',p=>{if(!p||Object.keys(p).sort().join(',')!=='instrumentId,runId'||typeof p.instrumentId!=='string'||!/^\d{6}\.(SH|SZ|BJ)$/.test(p.instrumentId))throw Error('图表参数无效。');runKey({runId:p.runId});return service.call('research.chart',p,30000)});
-  handle('stock:research:export',async p=>{
-    const data=await service.call('research.export',runKey(p));
-    if(!window)throw Error('窗口不可用。');
-    const result=await dialog.showSaveDialog(window,{title:'导出研究报告',defaultPath:data.filename,filters:[{name:'Markdown',extensions:['md']}]});
-    if(result.canceled||!result.filePath)return {saved:false};
-    await fs.writeFile(result.filePath,data.content,'utf8');return {saved:true};
-  });
   for(const operation of ['run','page','save','definitions','latest','prepare'])handle('stock:screen:'+operation,p=>{
     if(operation==='definitions'||operation==='latest'){noParams(p);return service.call('screen.'+operation)}
     if(!p||typeof p!=='object'||JSON.stringify(p).length>4096)throw Error('筛选请求无效。');
@@ -451,7 +406,7 @@ function registerIPC(){
     return providerCall('provider.diagnose',{endpoint});
   });
   handle('stock:service:status',p=>{noParams(p);return serviceStatus()});
-  handle('stock:service:retry',async p=>{noParams(p);await modelRecap.stop();await research.stop();await service.stop();service.restarts=0;await service.start();return service.status});
+  handle('stock:service:retry',async p=>{noParams(p);await service.stop();service.restarts=0;await service.start();return service.status});
 }
 async function createWindow(){
   nativeTheme.themeSource='dark';
@@ -478,7 +433,6 @@ else{
     await updates.initialize();
     updateChecks=new UpdateCheckScheduler(updates);updateChecks.start();
     autoSync=new AutoSyncScheduler({demand:true,callService:(method:string,params:any)=>service.call(method,params,30000),getToken:dataToken,canRun:()=>!quitting&&!maintenance&&!diagnosing&&service?.status.state==='ready'});
-    recapScheduler=new RecapScheduler({callService:()=>Promise.reject(Error('第一轮自动复盘已停用。')),canRun:()=>false,notify:()=>{}});
     const env:NodeJS.ProcessEnv={};for(const key of ['SystemRoot','WINDIR','TEMP','TMP','PATH','LOCALAPPDATA'])if(process.env[key])env[key]=process.env[key];
     env.PYTHONIOENCODING='utf-8';env.PYTHONUTF8='1';
     const command=app.isPackaged?path.join(process.resourcesPath,'service','stock-data.exe'):path.join(root,'.venv312','Scripts','python.exe');
@@ -488,52 +442,33 @@ else{
     const profile=projectState?projectData.current():await startupProfile(app.getPath('userData'),(options:Electron.MessageBoxOptions)=>dialog.showMessageBox(options));
     if(profile===null){app.quit();return}
     processGuard=new ProcessGuard(command,[...args],env);await processGuard.start();
-    args.push('--budget-dir',path.join(app.getPath('userData'),'model-budget'),'--data-dir',profile);
+    args.push('--data-dir',profile);
     service=new ServiceClient(command,args,{env,protect:(child:any)=>processGuard.protect(child)});service.on('status',publishServiceStatus);service.on('dataChanged',(domain:string)=>{if(window&&!window.isDestroyed())window.webContents.send('stock:data:changed',domain)});
     const codexBinary=app.isPackaged?path.join(process.resourcesPath,'codex','codex.exe'):path.join(root,'node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe');
     codexAccount=new CodexAccount({binary:codexBinary,home:path.join(app.getPath('userData'),'research-codex'),evidencePath:app.isPackaged?path.join(process.resourcesPath,'codex-readonly-probe.json'):path.join(root,'validation/codex-readonly-probe.json'),openExternal:(url:string)=>shell.openExternal(url),protect:(child:any)=>processGuard.protect(child)});
-    try{const mode=JSON.parse(await fs.readFile(authPreference(),'utf8'));if(mode==='api'||mode==='custom')researchAuthMode=mode}catch{}
+    try{const mode=JSON.parse(await fs.readFile(authPreference(),'utf8'));if(mode==='custom')researchAuthMode=mode}catch{}
     codexAccount.onChange=()=>{accountUsage.invalidate();if(window&&!window.isDestroyed())window.webContents.send('stock:account:usage-changed')};
     codexSandbox=new CodexSandbox({options:async()=>{const evidence=JSON.parse(await fs.readFile(app.isPackaged?path.join(process.resourcesPath,'codex-readonly-probe.json'):path.join(root,'validation/codex-readonly-probe.json'),'utf8'));return {binary:codexBinary,binarySha256:evidence.binarySha256,home:codexAccount.home,cwd:(await copilot.location()).path,experimentalApi:true,config:['cli_auth_credentials_store=\"keyring\"'],protect:(child:any)=>processGuard.protect(child)}}});
     copilot=new CopilotWorkspace({directory:path.join(app.getPath('userData'),'stock-project'),
-      switchProject:async(folder:string)=>{const overview=await projectData.switch(folder,service);try{recapScheduler.reset();autoSync.reset();if(overview)presence.setEnabled(overview.settings.closeToTray)}catch{/* The committed project/data association remains authoritative. */}},
+      switchProject:async(folder:string)=>{const overview=await projectData.switch(folder,service);try{autoSync.reset();if(overview)presence.setEnabled(overview.settings.closeToTray)}catch{/* The committed project/data association remains authoritative. */}},
       chooseDirectory:async()=>{const result=await dialog.showOpenDialog({title:'打开股票项目',properties:['openDirectory']});return result.canceled?null:result.filePaths[0]},
       publish:(event:any)=>{taskScheduler?.event(event);if(window&&!window.isDestroyed())window.webContents.send('stock:copilot:event',event)},
       options:async()=>{
         if(accountChanging)throw Error('账号设置正在更新。');
         const evidence=JSON.parse(await fs.readFile(app.isPackaged?path.join(process.resourcesPath,'codex-readonly-probe.json'):path.join(root,'validation/codex-readonly-probe.json'),'utf8'));
-        const auth=researchAuthMode==='chatgpt'?await codexAccount.config():researchAuthMode==='custom'?await credentialStore.readProvider():await modelConfig();
+        const auth=researchAuthMode==='chatgpt'?await codexAccount.config():await credentialStore.readProvider();
         const custom=researchAuthMode==='custom'?providerOptions(auth):null;
         const bridge=app.isPackaged?path.join(process.resourcesPath,'tools/workspace-mcp-server.mjs'):path.join(root,'dist/tools/workspace-mcp-server.mjs');
         const browser=await browserToolOptions({directory:app.getPath('userData'),project:(await copilot.location()).path,command:process.execPath,entry:browserEntry()});
         const tools=await openStockTools(await readStockTools(app.getPath('userData')),{command:process.execPath,bridge,callService:(method:string,params:any)=>{if(maintenance)throw Error('正在维护资料。');if(method==='scheduler.notify')return taskScheduler.notifyCurrent(params);if(method==='scheduler.list')return taskScheduler.list();if(method==='scheduler.save')return taskScheduler.save(params);if(method==='scheduler.remove')return taskScheduler.remove(params.id);return service.call(method,params,20000)},enqueueSync:async(kind:string,params:any)=>{if(maintenance||quitting)throw Error('资料正在维护。');const token=await dataToken();if(maintenance||quitting)throw Error('资料正在维护。');return service.call('jobs.enqueue',{kind,params,token})}});
         return {binary:codexBinary,binarySha256:evidence.binarySha256,home:codexAccount.home,experimentalApi:true,
           config:['cli_auth_credentials_store="keyring"',...(custom?custom.config:[`forced_login_method="${researchAuthMode}"`]),...tools.config,...browser.config],
-          env:{...(custom?.env??{}),...(researchAuthMode==='api'?{OPENAI_API_KEY:auth.apiKey}:{}),...tools.env,...browser.env},releaseTools:tools.releaseTools,
+          env:{...(custom?.env??{}),...tools.env,...browser.env},releaseTools:tools.releaseTools,
           protect:(child:any)=>processGuard.protect(child),threadOptions:{model:auth.model,modelProvider:custom?'stock_custom':'openai',...policyThreadOptions(await readCopilotPolicy(app.getPath('userData')))}};
       }});
     if(projectState){copilot.project=await fs.realpath(projectState.activeProject);await fs.access(path.join(projectData.current(),'stock.sqlite'))}
     else{await service.start();await projectData.initialize((await copilot.location()).path,profile)}
     service.args[service.args.length-1]=projectData.current();
-    research=new ResearchController({callService:(method:string,params:any)=>service.call(method,params,30000),
-      protectHost:(child:any)=>processGuard.protect(child),
-      onSettled:(state:string)=>presence.notify('research',state),
-      openTools:async(context:any)=>{
-        const evidence=JSON.parse(await fs.readFile(app.isPackaged?path.join(process.resourcesPath,'codex-mcp-electron-probe.json'):path.join(root,'validation/codex-mcp-electron-probe.json'),'utf8'));
-        const broker=new RunToolBroker({context,callService:(method:string,params:any)=>service.call(method,params,20000)});
-        const pipe=await startToolPipe(broker);
-        return {revoke:()=>broker.revoke(),close:()=>pipe.close(),config:{command:process.execPath,bridge:app.isPackaged?path.join(process.resourcesPath,'tools/mcp-server.mjs'):path.join(root,'dist/tools/mcp-server.mjs'),endpoint:pipe.endpoint,token:broker.token,runId:context.runId,evidence}};
-      },
-      spawnHost:()=>utilityProcess.fork(path.join(__dirname,'../agent/worker.mjs'),[],{env:{...env,...(process.env.USERPROFILE?{USERPROFILE:process.env.USERPROFILE}:{})},stdio:'ignore',serviceName:'Stock Research'}),
-      options:async(runId:string)=>{
-        if(accountChanging)throw Error('账号设置正在更新，请稍后开始研究。');
-        const config=researchAuthMode==='chatgpt'?await codexAccount.config():{...await modelConfig(),authMode:'api'};
-        const base=path.join(app.getPath('userData'),'agent',runId);
-        const binary=app.isPackaged?path.join(process.resourcesPath,'codex','codex.exe'):path.join(root,'node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe');
-        const evidencePath=app.isPackaged?path.join(process.resourcesPath,'codex-readonly-probe.json'):path.join(root,'validation/codex-readonly-probe.json');
-        return {...config,binary,home:researchAuthMode==='chatgpt'?codexAccount.home:path.join(base,'home'),workingDirectory:path.join(base,'work'),evidence:JSON.parse(await fs.readFile(evidencePath,'utf8'))};
-      }});
-    modelRecap=new ModelRecapController({callService:(method:string,params:any)=>service.call(method,params,30000),getKey:async()=>(await modelConfig()).apiKey,canRun:()=>!quitting&&!maintenance&&!diagnosing&&!modelRecapConfiguring&&!research.status()&&service?.status.state==='ready',protectHost:(child:any)=>processGuard.protect(child),spawnHost:()=>utilityProcess.fork(path.join(__dirname,'../agent/recap-worker.mjs'),[],{env,stdio:'ignore',serviceName:'Stock Model Recap'})});
     registerIPC();
     Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Stock',submenu:[{role:'quit',label:'退出'}]},{label:'视图',submenu:[{role:'resetZoom',label:'实际大小'},{role:'zoomIn',label:'放大'},{role:'zoomOut',label:'缩小'},{role:'togglefullscreen',label:'全屏'}]}]));
     taskScheduler=new TaskScheduler({notify:(notice:any)=>presence.notifyScheduled({...notice,onClick:async()=>{if((await copilot.location()).path===notice.project)window?.webContents.send('stock:copilot:event',{kind:'openScheduledThread',threadId:notice.threadId,turnId:notice.turnId})}}),online:()=>net.isOnline(),blocker:()=>{const threadId=copilot.session?.active.keys().next().value??copilot.session?.busy.values().next().value??[...copilot.requests.values()][0]?.params.threadId;return {threadId,message:threadId?'Codex 正在处理另一会话':accountChanging?'账号配置正在更新':maintenance?'资料维护正在进行':diagnosing?'诊断正在进行':copilot.connecting?'Codex 正在连接':'数据服务尚未就绪'}},file:path.join(app.getPath('userData'),'scheduler.json'),project:async()=>(await copilot.location()).path,
@@ -543,14 +478,14 @@ else{
     });
     await taskScheduler.initialize();
     try{const saved=JSON.parse(await fs.readFile(path.join(app.getPath('userData'),'window-close.json'),'utf8'));if(['ask','background','quit'].includes(saved.behavior))closeBehavior=saved.behavior}catch{}
-    await service.start();await createWindow();service.start().then(async()=>{const data=await service.call('overview');presence.setEnabled(data.settings.closeToTray);void tickRecap()}).catch(()=>{});
-    recapTimer=setInterval(()=>void tickRecap(),60000);
+    await service.start();await createWindow();service.start().then(async()=>{const data=await service.call('overview');presence.setEnabled(data.settings.closeToTray);void tickAutoSync()}).catch(()=>{});
+    autoSyncTimer=setInterval(()=>void tickAutoSync(),60000);
     const unbindSchedulerPower=bindSchedulerPower(powerMonitor,taskScheduler);
     app.once('before-quit',unbindSchedulerPower);
-    powerMonitor.on('resume',()=>{void tickRecap()});
+    powerMonitor.on('resume',()=>{void tickAutoSync()});
   }).catch(()=>app.quit());
   app.on('window-all-closed',()=>app.quit());
-  app.on('before-quit',event=>{if(quitting)return;event.preventDefault();if(windowDraftBlocked){presence?.show();return}quitting=true;void updateChecks?.stop();void taskScheduler?.stop();autoSync?.stop();recapScheduler?.stop();clearInterval(recapTimer);presence?.shutdown();credentialStore.clearSession();codexAccount?.stop();void shutdownResources([()=>Promise.allSettled([taskScheduler?.chain,codexSandbox?.stop(),maintenanceDone,updates?.shutdown(),autoSync?.pending,recapScheduler?.pending]),()=>modelRecap?.stop(),()=>research?.stop(),()=>copilot?.stop(),()=>service?.stop(),()=>processGuard?.stop()]).finally(()=>app.quit())});
+  app.on('before-quit',event=>{if(quitting)return;event.preventDefault();if(windowDraftBlocked){presence?.show();return}quitting=true;void updateChecks?.stop();void taskScheduler?.stop();autoSync?.stop();clearInterval(autoSyncTimer);presence?.shutdown();credentialStore.clearSession();codexAccount?.stop();void shutdownResources([()=>Promise.allSettled([taskScheduler?.chain,codexSandbox?.stop(),maintenanceDone,updates?.shutdown(),autoSync?.pending]),()=>copilot?.stop(),()=>service?.stop(),()=>processGuard?.stop()]).finally(()=>app.quit())});
 }
 
 

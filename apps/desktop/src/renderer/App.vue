@@ -19,7 +19,6 @@ import SectorDetail from './SectorDetail.vue';
 import {marketIndices} from './use-market';
 import JobsPanel from './JobsPanel.vue';
 import StockComparison from './StockComparison.vue';
-import ResearchPanel from './ResearchPanel.vue';
 import CopilotPanel from './CopilotPanel.vue';
 import AutoSyncPanel from './AutoSyncPanel.vue';
 import StockDetail from './StockDetail.vue';
@@ -37,7 +36,7 @@ import AccountUsage from './AccountUsage.vue';
 import CodexSandboxSettings from './CodexSandboxSettings.vue';
 import UpdatePanel from './UpdatePanel.vue';
 import type {UpdateStatus,Diagnostic,Overview,ServiceStatus,Settings,Watchlist} from '../../../../packages/contracts/desktop';
-type Page=`sector:${string}`|`index:${string}`|`compare:${string}`|`stock:${string}`|`file:${string}`|'holdings'|'market'|'watchlists'|'research'|'jobs'|'settings';
+type Page=`sector:${string}`|`index:${string}`|`compare:${string}`|`stock:${string}`|`file:${string}`|'holdings'|'market'|'watchlists'|'jobs'|'settings';
 const fileGuards=ref<Record<string,boolean>>({});
 function updateGuard(id:string,blocked:boolean){fileGuards.value[id]=blocked;const guarded=Object.values(fileGuards.value).some(Boolean);void window.stock?.windowDraftGuard(guarded).catch(()=>{error.value='无法更新窗口保护，请先保存草稿。'});if(!guarded&&['此文件的草稿无法自动保存，请先保存文件。','有未保存的草稿，请先保存或重试草稿存储。'].includes(error.value))error.value=''}
 const updateNotice=ref<UpdateStatus|null>(null),revealUpdateSettings=ref(0);
@@ -110,7 +109,7 @@ function resize(event:PointerEvent){if(drag?.id===event.pointerId)setSplitWidth(
 function finishResize(){if(drag){drag=null;rememberSplit()}}
 function resizeKey(event:KeyboardEvent){const values:Record<string,number>={ArrowLeft:conversationWidth.value+20,ArrowRight:conversationWidth.value-20,Home:splitMinimum.value,End:splitSpace.value-splitMinimum.value};if(event.key in values){event.preventDefault();setSplitWidth(values[event.key]);rememberSplit()}}
 function closeInspector(){tabsVisible.value=true;inspectorOpen.value=false;inspectorToggle.value?.focus()}
-const pages=[{id:'holdings',name:'持仓',path:''},{id:'market',name:'行情',path:'M3 17l5-6 4 3 8-10M3 21h18'},{id:'watchlists',name:'自选',path:'m12 3 3 6 6 .8-4.5 4.4 1 6.3-5.5-3-5.5 3 1-6.3L3 9.8 9 9Z'},{id:'research',name:'研究',path:'M5 3h10l4 4v14H5ZM14 3v5h5M8 12h8M8 16h6'},{id:'jobs',name:'任务',path:'M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1'},{id:'settings',name:'设置',path:'M4 7h16M4 17h16M8 4v6M16 14v6'}];
+const pages=[{id:'holdings',name:'持仓',path:''},{id:'market',name:'行情',path:'M3 17l5-6 4 3 8-10M3 21h18'},{id:'watchlists',name:'自选',path:'m12 3 3 6 6 .8-4.5 4.4 1 6.3-5.5-3-5.5 3 1-6.3L3 9.8 9 9Z'},{id:'jobs',name:'任务',path:'M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1'},{id:'settings',name:'设置',path:'M4 7h16M4 17h16M8 4v6M16 14v6'}];
 const overview=ref<Overview|null>(null),lists=ref<Watchlist[]>([]);
 const status=ref<ServiceStatus>({state:window.stock?'starting':'stopped',message:window.stock?'正在启动本地服务':'浏览器界面预览',restarts:0});
 const credentials=ref({configured:false,encrypted:false});
@@ -236,7 +235,6 @@ onBeforeUnmount(()=>window.removeEventListener('stock:external-link-error',exter
       <SectorDetail @compare="openComparison" v-else-if="tab.startsWith('sector:')" :id="tab.slice(7)" :color-mode="preferences.colorMode" @open="openTab(`stock:${$event}`)" @changed="refresh"/>
       <MarketOverview @sector="openSector" v-else-if="tab==='market'||tab.startsWith('index:')" :index-id="tab.startsWith('index:')?tab.slice(6):undefined" :color-mode="preferences.colorMode" @open="openTab(`stock:${$event}`)" @index="openTab(`index:${$event}`)" @changed="refresh"/>
       <JobsPanel v-else-if="tab==='jobs'"/>
-      <ResearchPanel v-else-if="tab==='research'"/>
       <WatchlistPanel @compare="openComparison" @open="openTab(`stock:${$event}`)" v-else-if="tab==='watchlists'" :groups="lists" :selected-id="activeGroup" @selected="activeGroup=$event" @changed="refresh" @create="dialog?.showModal()"/>
     </div><div v-if="!tabs.length" class="empty-work"><h2>打开你想看的信息</h2><p>从左侧选择行情、自选或项目内容。</p><UiButton icon="chart" @click="openTab('market')">打开行情</UiButton></div></main>
     <aside v-show="inspectorOpen" id="research-inspector" class="inspector" aria-label="研究助手" @keydown.esc.stop="closeInspector"><div v-show="tabsVisible" class="inspector-resize" role="separator" tabindex="0" aria-label="调整 Tab 与对话宽度，左右方向键调整" aria-orientation="vertical" :aria-valuemin="Math.round(splitMinimum)" :aria-valuemax="Math.round(splitSpace-splitMinimum)" :aria-valuenow="Math.round(conversationWidth)" aria-controls="research-inspector" @pointerdown="beginResize" @pointermove="resize" @pointerup="finishResize" @pointercancel="finishResize" @lostpointercapture="finishResize" @keydown="resizeKey"/><CopilotPanel :tabs-visible="tabsVisible" @toggle-tabs="tabsVisible=!tabsVisible" @history-layout="historyExtra=$event" @guard="updateGuard('copilot',$event)" @open="openTab(`file:${$event}`)"/></aside>

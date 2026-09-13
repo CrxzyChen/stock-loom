@@ -1,6 +1,6 @@
 {
   "name": "stock-workshop",
-  "version": "0.2.0-beta.5",
+  "version": "0.2.0-beta.6",
   "private": true,
   "description": "Stock Loom · 观市 — local-first A-share workspace with Codex Copilot",
   "author": "CrxzyChen",
@@ -51,7 +51,9 @@
       "output": "release"
     },
     "files": [
-      "dist/**/*",
+      "dist/main/**/*",
+      "dist/renderer/**/*",
+      "dist/tools/mcp-server.mjs",
       "package.json"
     ],
     "extraResources": [

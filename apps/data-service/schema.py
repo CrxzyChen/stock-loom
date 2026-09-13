@@ -1,3 +1,3 @@
-"""Version 10 adds auditable cash flows; old services must not write this profile."""
+"""The supported profile format. Pre-release schema migrations are retired."""
 SCHEMA_VERSION = 10
-RESTORABLE_SCHEMAS = (5, 6, 7, 8, 9, 10)
+RESTORABLE_SCHEMAS = (SCHEMA_VERSION,)

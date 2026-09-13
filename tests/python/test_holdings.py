@@ -46,7 +46,6 @@ class HoldingsTests(unittest.TestCase):
             store.close();store=Store(folder)
             self.assertEqual(store.dispatch('holdings.list',{})[0]['costPrice'],'10.1250')
             self.assertEqual(store.dispatch('holdings.save',{**p,'quantity':0,'revision':1,'costPrice':None})['quantity'],0)
-            self.assertTrue(list((pathlib.Path(folder)/'backups').glob('pre-schema-8-*.sqlite')))
         finally:store.close()
 
 if __name__=='__main__':unittest.main()

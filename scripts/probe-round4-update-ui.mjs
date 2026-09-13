@@ -4,7 +4,7 @@ const action=process.argv[2];if(!['download','install'].includes(action))throw E
 const handle=JSON.parse(await fs.readFile('.runtime/round4-installed-app.json','utf8'));
 const browser=await chromium.connectOverCDP(`http://127.0.0.1:${handle.port}`);
 const page=browser.contexts()[0].pages()[0];
-const record={passed:false,action,actualInstalledApplication:true,from:'0.2.0-beta.4',to:'0.2.0-beta.5',events:[]};
+const record={passed:false,action,actualInstalledApplication:true,from:'0.2.0-beta.4',to:'0.2.0-beta.6',events:[]};
 try{
  const initial=await page.evaluate(()=>window.stock.updateStatus());if(initial.current!==record.from)throw Error('Unexpected installed version');
  await page.locator('.activity button').filter({hasText:'设置'}).click();
@@ -39,4 +39,4 @@ try{
   record.applicationExited=true;record.installerCompletionVerified=false;record.passed=true;
  }
 }catch(error){record.error=error.message;process.exitCode=1}
-finally{await browser.close();await fs.writeFile(`validation/round4-update-ui-${action}-beta5.json`,JSON.stringify(record,null,2));console.log(JSON.stringify(record))}
+finally{await browser.close();await fs.writeFile(`validation/round4-update-ui-${action}-beta6.json`,JSON.stringify(record,null,2));console.log(JSON.stringify(record))}

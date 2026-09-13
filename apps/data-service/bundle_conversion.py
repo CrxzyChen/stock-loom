@@ -16,7 +16,6 @@ class BundleConversion:
             self.db.execute('BEGIN IMMEDIATE')
             if self.db.execute('PRAGMA user_version').fetchone()[0]!=SCHEMA_VERSION:raise ProviderError('SCHEMA_REQUIRED','快照整理需要新版资料格式。')
             if (self.db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','running','retry_wait') LIMIT 1").fetchone()
-                or self.db.execute("SELECT 1 FROM research_runs WHERE state='running' LIMIT 1").fetchone()
                 or self.screen_batch_active or self.active_job is not None):raise ProviderError('BUSY','请先结束同步和研究，并暂停股票池批次。')
             records=self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset LIKE 'daily:%' ORDER BY id LIMIT 100001").fetchall()
             if len(records)>100000:raise ProviderError('BUNDLE_LIMIT','快照数量超过本次整理上限。')

@@ -112,17 +112,3 @@ class BarsTests(unittest.TestCase):
             with self.assertRaises(OSError):self.store.sync_bars(self.params,self.fetch)
         self.assertEqual(self.store.db.execute('SELECT manifest FROM snapshots WHERE id=?',(snapshot,)).fetchone()[0],original)
         with self.assertRaises(ProviderError):self.read(snapshot)
-
-    def test_research_chart_pins_snapshot_and_rejects_corruption(self):
-        first=self.store.sync_bars(self.params,self.fetch)['snapshotId']
-        context=self.store.prepare_research({'instrumentIds':['000001.SZ'],'question':'chart fixture'})
-        p={'runId':context['runId'],'instrumentId':'000001.SZ'}
-        chart=self.store.create_research_chart(p)
-        self.assertEqual(chart['snapshotId'],first);self.assertEqual(chart['rows'],2)
-        self.assertEqual(chart['anchor'],'20240103');self.assertNotIn('<script',chart['svg'])
-        self.daily[0]['close']=20.5;self.store.sync_bars(self.params,self.fetch)
-        self.assertEqual(self.store.create_research_chart(p),chart)
-        with self.assertRaises(ProviderError):self.store.create_research_chart({**p,'instrumentId':'600000.SH'})
-        artifact=self.store.root/'runs'/context['runId']/'charts'/(chart['artifactId']+'.json')
-        artifact.write_text('{}')
-        with self.assertRaises(ProviderError):self.store.create_research_chart(p)

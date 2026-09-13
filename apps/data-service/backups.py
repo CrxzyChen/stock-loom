@@ -50,7 +50,6 @@ class Backups:
         # A persisted latest-result pointer must remain usable after restore.
         # Enumerating existing files alone cannot detect a missing referenced file.
         self.latest_screen({})
-        self.validate_model_recaps()
         for row in self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset LIKE 'index:%'"):
             self.checked_index(row,for_archive=True)
         for row in self.db.execute("SELECT id,manifest FROM snapshots WHERE dataset LIKE 'sectors:%' OR dataset LIKE 'sector-history:%'"):
@@ -101,10 +100,10 @@ class Backups:
             add(self.root/'datasets'/storage['directory']/'data.json')
             del members
         for row in self.db.execute('SELECT id,state FROM research_runs'):
-            key={'runId':row['id']};self.research_context(key);folder=self.root/'runs'/row['id']
+            folder=self.root/'runs'/row['id']
             add(folder/'context.json');add(folder/'context.sha256')
-            if row['state']=='succeeded':self.read_report(key);add(folder/'report.json')
-            if (folder/'draft.json').exists():self.read_research_draft(key);add(folder/'draft.json')
+            if row['state']=='succeeded':add(folder/'report.json')
+            if (folder/'draft.json').exists():add(folder/'draft.json')
             if (folder/'charts').is_dir():
                 for file in (folder/'charts').iterdir():
                     if re.fullmatch(r'[a-f0-9]{64}\.json',file.name):

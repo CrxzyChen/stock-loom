@@ -7,19 +7,6 @@ from decimal import Decimal, ROUND_HALF_UP, localcontext
 from provider import ProviderError
 
 
-def migrate_holdings(db, root):
-    backup = sqlite3.connect(root / 'backups' / ('pre-schema-8-' + str(uuid.uuid4()) + '.sqlite'))
-    try: db.backup(backup)
-    finally: backup.close()
-    try:
-        db.executescript('''BEGIN IMMEDIATE;
-          CREATE TABLE holdings(instrument_id TEXT PRIMARY KEY REFERENCES instruments(id),
-            quantity INTEGER NOT NULL CHECK(quantity>=0), cost_price TEXT,
-            as_of TEXT NOT NULL, revision INTEGER NOT NULL, updated_at TEXT NOT NULL);
-          PRAGMA user_version=8; COMMIT;''')
-    except Exception:
-        db.rollback()
-        raise
 
 
 class Holdings:

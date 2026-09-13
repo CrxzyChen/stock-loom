@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import {transform} from 'esbuild';
 // Execute the shipped coordinator with isolated dependencies; never launch Codex or read credentials.
 const source=await fs.readFile('apps/desktop/src/main/main.ts','utf8');
-const body=source.slice(source.indexOf('async function accountChange('),source.indexOf('\nlet modelRecap:'));
+const body=source.slice(source.indexOf('async function accountChange('),source.indexOf('\nlet presence:'));
 const {code}=await transform(body,{loader:'ts',format:'esm'});
 function fixture(){const copilot={connecting:null,active:false,busy(){return !!(this.connecting||this.active)},stops:0,async stop(){this.stops++}};const change=Function('copilot','research','codexAccount','let accountChanging=false,accountOperation=null;const accountUsage={invalidate(){}};const window=null;'+code+';return accountChange;')(copilot,{status:()=>false},{refreshing:null});return {copilot,change}}
 test('mode change waits for background connection and never interrupts an active turn',async()=>{const f=fixture();let ready;f.copilot.connecting=new Promise(r=>ready=r).finally(()=>{f.copilot.connecting=null});let changed=false;const pending=f.change(async()=>{changed=true},true);assert.equal(changed,false);ready();await pending;assert.equal(changed,true);assert.equal(f.copilot.stops,1);f.copilot.active=true;await assert.rejects(f.change(async()=>{},true),/对话仍在执行/);assert.equal(f.copilot.stops,1)});

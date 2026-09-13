@@ -37,7 +37,7 @@ for name in ('project-data.json','research-auth-mode.json','scheduler.json','cop
 record={'stage':stage,'offlineComparison':True,'integrity':integrity,'tables':tables,'trees':trees,'configurationFiles':files}
 if stage=='after':
     live=json.loads((root/'validation/round4-installed-after.json').read_text(encoding='utf-8'))
-    record['layoutSemanticsPreserved']=live.get('layoutPreserved') is True and live.get('version')=='0.2.0-beta.5'
+    record['layoutSemanticsPreserved']=live.get('layoutPreserved') is True and live.get('version')=='0.2.0-beta.6'
     record['accountUsable']=live.get('observed',{}).get('usageState')=='ready'
     # Chromium rewrites LevelDB files during normal startup. Compare actual saved
     # layout values through the installed renderer rather than these storage files.

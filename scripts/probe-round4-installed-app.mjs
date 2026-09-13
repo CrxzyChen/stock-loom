@@ -34,7 +34,7 @@ try{
   record.layoutPreserved=JSON.stringify(before)===JSON.stringify(after);
  }
  if(stage!=='a')record.copilot=await page.evaluate(async()=>{const models=await window.stock.copilotModels();const history=await window.stock.copilotList();return {modelCount:models.data.length,historyCount:history.data.length}});
- const expected={a:'0.2.0-beta.2',a4:'0.2.0-beta.4',after:'0.2.0-beta.5'}[stage];
+ const expected={a:'0.2.0-beta.2',a4:'0.2.0-beta.4',after:'0.2.0-beta.6'}[stage];
  record.passed=observed.current===version&&version===expected&&observed.holdingsCount>0&&observed.watchlistCount>0&&observed.usageState==='ready'&&(stage!=='after'||record.layoutPreserved)&&(stage==='a'||record.copilot.modelCount>0);
  record.screenshot=path.resolve(`.runtime/round4-installed-${stage}.png`);await page.screenshot({path:record.screenshot});
 }catch(error){record.error=error.message;process.exitCode=1}

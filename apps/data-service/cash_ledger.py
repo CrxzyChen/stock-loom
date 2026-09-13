@@ -6,20 +6,6 @@ from provider import ProviderError
 from position_ledger import amount,money
 from transactions import atomic
 
-def migrate_cash_ledger(db,root):
-    version=db.execute('PRAGMA user_version').fetchone()[0]
-    if version>=10:return
-    if version!=9 or db.in_transaction:raise ProviderError('INVALID_STATE','现金迁移需要已提交的版本9数据库。')
-    backup=sqlite3.connect(root/'backups'/('pre-schema-10-'+str(uuid.uuid4())+'.sqlite'))
-    try:db.backup(backup)
-    finally:backup.close()
-    try:
-        db.executescript('''BEGIN IMMEDIATE;
-          CREATE TABLE cash_events(id TEXT PRIMARY KEY,event_date TEXT NOT NULL,payload TEXT NOT NULL,
-            supersedes TEXT UNIQUE REFERENCES cash_events(id),voided INTEGER NOT NULL CHECK(voided IN (0,1)),created_at TEXT NOT NULL);
-          CREATE TABLE cash_requests(request_id TEXT PRIMARY KEY,request TEXT NOT NULL,response TEXT NOT NULL);
-          PRAGMA user_version=10; COMMIT;''')
-    except BaseException:db.rollback();raise
 
 class CashLedger:
     def cash_events(self):

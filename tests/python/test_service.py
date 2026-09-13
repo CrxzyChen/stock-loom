@@ -51,7 +51,7 @@ class StoreTests(unittest.TestCase):
         self.store.db.execute('PRAGMA user_version=99')
         with self.assertRaises(service.DomainError) as context:
             service.Store(self.directory)
-        self.assertEqual(context.exception.code, 'SCHEMA_NEWER')
+        self.assertEqual(context.exception.code, 'SCHEMA_UNSUPPORTED')
         self.assertEqual(self.store.db.execute('PRAGMA user_version').fetchone()[0], 99)
 
 

@@ -1,4 +1,4 @@
-export interface CodexAccountStatus {connected:boolean;pending:boolean;model:string;models:{id:string;name:string;isDefault:boolean}[];error:string;mode?:'chatgpt'|'api'|'custom'}
+export interface CodexAccountStatus {connected:boolean;pending:boolean;model:string;models:{id:string;name:string;isDefault:boolean}[];error:string;mode?:'chatgpt'|'custom'}
 import type {ServiceState,ServiceStatus,Settings,Overview,Watchlist,JobEvent,JobEventPage,Instrument,Adjustment,Bar,BarPage,BarVersion,FinancialData,FinancialVersion,ScreenCondition,ScreenPage,InstrumentPage,Diagnostic,Job,ScreenPoolPlan,ScreenBatch,RecapReport,RecapResult,ModelRecapPolicy,ModelRecapUsage,ModelRecapAttempt,ModelRecapContent,ResearchContext,ResearchEntry,ResearchReport,RpcMetadata} from './generated';
 export type {ServiceState,ServiceStatus,Settings,Overview,Watchlist,JobEvent,JobEventPage,Instrument,Adjustment,Bar,BarPage,BarVersion,FinancialData,FinancialVersion,ScreenCondition,ScreenPage,InstrumentPage,Diagnostic,Job,ScreenPoolPlan,ScreenBatch,RecapReport,RecapResult,ModelRecapPolicy,ModelRecapUsage,ModelRecapAttempt,ModelRecapContent,ResearchContext,ResearchEntry,ResearchReport,RpcMetadata} from './generated';
 export interface ModelRecapInfo {policy:ModelRecapPolicy;usage:ModelRecapUsage;attempt:ModelRecapAttempt;status:{state:string;message:string};quote:{reservedMicroUsd:number;maxOutputTokens:number;priceCheckedAt:string}|null;priceError:string;model:string}
@@ -100,16 +100,6 @@ export interface DesktopBridge {
   downloadUpdate():Promise<UpdateStatus>;
   cancelUpdate():Promise<UpdateStatus>;
   installUpdate():Promise<UpdateStatus>;
-  recapStatus():Promise<{state:string;message:string;checkedAt:string|null}>;
-  modelRecapInfo():Promise<ModelRecapInfo>;
-  configureModelRecap(p:ModelRecapPolicy):Promise<unknown>;
-  startModelRecap():Promise<unknown>;
-  stopModelRecap():Promise<unknown>;
-  latestModelRecap():Promise<ModelRecapReport|null>;
-  recapPolicy():Promise<{enabled:boolean}>;
-  configureRecap(enabled:boolean):Promise<{enabled:boolean}>;
-  latestRecap():Promise<RecapReport|null>;
-  generateRecap():Promise<RecapResult>;
   createBackup():Promise<{completed:boolean;bytes?:number;files?:number}>;
   restoreBackup():Promise<{completed:boolean;originalPreserved?:boolean}>;
   profileLocation():Promise<{path:string;migration:{state:string;message:string}}>;
@@ -121,20 +111,7 @@ export interface DesktopBridge {
   accountCancel():Promise<CodexAccountStatus>;
   accountLogout():Promise<CodexAccountStatus>;
   accountModel(model:string):Promise<CodexAccountStatus>;
-  accountMode(mode:'chatgpt'|'api'|'custom'):Promise<CodexAccountStatus>;
-  modelStatus():Promise<{configured:boolean;model:string;encrypted:boolean}>;
-  saveModel(model:string,apiKey:string):Promise<{configured:boolean;model:string;encrypted:boolean}>;
-  prepareResearch(instrumentIds:string[],question:string,requestKey:string):Promise<ResearchContext>;
-  researchEvents(runId:string,after:number):Promise<{items:{sequence:number;stage:string;createdAt:string}[];nextCursor:number;state:string}>;
-  startResearch(runId:string):Promise<{runId:string;state:string}>;
-  cancelResearch(runId:string):Promise<{runId:string;state:string}>;
-  researchStatus():Promise<{runId:string;stage:string}|null>;
-  researchList(offset:number):Promise<{items:ResearchEntry[];total:number}>;
-  researchReport(runId:string):Promise<DesktopResearchReport>;
-  researchContext(runId:string):Promise<ResearchContext>;
-  researchDraft(runId:string):Promise<{draftId:string;payload:{runId:string;report:{summary:string;claims:{text:string;factIds:string[];values?:{factId:string;value:number;unit:string;date:string}[]}[];limitations:string[]}}}>;
-  researchChart(runId:string,instrumentId:string):Promise<{artifactId:string;snapshotId:string;asOf:string;svg:string;rows:number}>;
-  exportResearch(runId:string):Promise<{saved:boolean}>;
+  accountMode(mode:'chatgpt'|'custom'):Promise<CodexAccountStatus>;
   overview(): Promise<Overview>;
   watchlists(): Promise<Watchlist[]>;
   createWatchlist(name: string): Promise<Watchlist>;

@@ -6,11 +6,6 @@ function token(value){
   if(typeof value!=='string'||!/^\S{16,256}$/.test(value))throw Error('请输入有效的 Tushare Token。');
   return value;
 }
-function model(value){
-  if(!value||Object.keys(value).sort().join(',')!=='apiKey,model'||typeof value.model!=='string'||!/^[A-Za-z0-9._:-]{1,100}$/.test(value.model)||typeof value.apiKey!=='string'||!/^\S{16,512}$/.test(value.apiKey))throw Error('请输入有效的模型 ID 和 API Key。');
-  return {model:value.model,apiKey:value.apiKey};
-}
-
 // Main-process only. Renderer receives status, never stored secrets.
 export class CredentialStore {
   constructor({safeStorage,directory}){this.safeStorage=safeStorage;this.directory=directory;this.session=new Map();this.saving=new Set()}
@@ -22,7 +17,7 @@ export class CredentialStore {
       if(!this.safeStorage.isEncryptionAvailable())throw Error();
       const text=this.safeStorage.decryptString(await fs.readFile(this.file(kind)));
       return validate(kind==='tushare'?text:JSON.parse(text));
-    }catch{throw Error(kind==='model'?'请先配置研究模型及 API Key。':'请先保存有效凭证。')}
+    }catch{throw Error('请先保存有效凭证。')}
   }
   async save(kind,value){
     if(this.saving.has(kind))throw Error('凭证正在保存，请稍候。');
@@ -38,11 +33,8 @@ export class CredentialStore {
     }finally{this.saving.delete(kind)}
   }
   async tokenStatus(){try{await this.readToken();return {configured:true,encrypted:!this.session.has('tushare')}}catch{return {configured:false,encrypted:false}}}
-  async modelStatus(){try{const value=await this.readModel();return {configured:true,model:value.model,encrypted:!this.session.has('model')}}catch{return {configured:false,model:'',encrypted:false}}}
   readToken(){return this.read('tushare',token)}
-  readModel(){return this.read('model',model)}
   async saveToken(value){await this.save('tushare',token(value));return this.tokenStatus()}
-  async saveModel(value){await this.save('model',model(value));return this.modelStatus()}
   readProvider(){return this.read('provider',validateProvider)}
   async providerStatus(){try{const {apiKey,...value}=await this.readProvider();return {...value,configured:true,hasKey:!!apiKey,encrypted:!this.session.has('provider')}}catch{return {configured:false,hasKey:false,encrypted:false,name:'',baseUrl:'',model:''}}}
   async saveProvider(value){

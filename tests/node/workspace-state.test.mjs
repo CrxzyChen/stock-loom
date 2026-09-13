@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readWorkspace,writeWorkspace} from '../../apps/desktop/src/renderer/workspace-state.mjs';
-test('comparison tabs restore and legacy screen migrates to market',()=>{
+test('comparison tabs restore and retired pages are discarded',()=>{
  const comparison='compare:000001.SZ,600000.SH';
  const storage={getItem:()=>JSON.stringify({version:1,tabs:['screen','market',comparison,'compare:000001.SZ,000001.SZ','compare:bad,600000.SH'],active:'screen',panel:'market'})};
  assert.deepEqual(readWorkspace(storage,'a'),{tabs:['market',comparison],active:'market',panel:'market'});

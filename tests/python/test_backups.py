@@ -23,9 +23,12 @@ class BackupTests(unittest.TestCase):
         with self.store.db:self.store.db.execute("INSERT INTO instruments(id,name,exchange,list_status) VALUES ('000001.SZ','SYNTHETIC','SZSE','L')")
         self.group=self.store.create_list({'name':'保留的分组'})
         self.store.change_member({'listId':self.group['id'],'instrumentId':'000001.SZ'},True)
-        context=self.store.prepare_research({'instrumentIds':['000001.SZ'],'question':'synthetic backup'})
-        self.key={'runId':context['runId']};self.store.start_research(self.key)
-        self.store.save_report({**self.key,'report':{'summary':'合成报告','claims':[],'limitations':['缺少数据']},'model':'fixture','threadId':'fixture','usage':{'input_tokens':1,'cached_input_tokens':0,'output_tokens':1}})
+        self.key={'runId':'11111111-1111-4111-8111-111111111111'}
+        folder=self.store.root/'runs'/self.key['runId'];folder.mkdir()
+        (folder/'context.json').write_text('{}',encoding='utf-8')
+        (folder/'context.sha256').write_text(hashlib.sha256(b'{}').hexdigest(),encoding='utf-8')
+        (folder/'report.json').write_text('stored historical report',encoding='utf-8')
+        with self.store.db:self.store.db.execute('INSERT INTO research_runs VALUES (?,?,?)',(self.key['runId'],'succeeded','2026-01-01'))
     def tearDown(self):self.store.close()
     def test_windows_virtualized_regular_file_is_archived_by_logical_profile_path(self):
         source=self.store.root/'runs'/self.key['runId']/'context.json'
@@ -78,7 +81,7 @@ class BackupTests(unittest.TestCase):
                 self.assertEqual(candidate.lists(),[renamed])
                 self.assertEqual(candidate.members({'listId':self.group['id']}),members)
                 self.assertEqual(members[0]['listStatus'],'D')
-                self.assertEqual(candidate.read_report(self.key)['payload']['report']['summary'],'合成报告')
+                self.assertEqual((candidate.root/'runs'/self.key['runId']/'report.json').read_text(encoding='utf-8'),'stored historical report')
             finally:candidate.close()
     def test_profile_validation_checks_references_without_creating_archive(self):
         before=set(self.store.root.rglob('*'))
@@ -91,7 +94,7 @@ class BackupTests(unittest.TestCase):
         with self.assertRaisesRegex(ProviderError,'请先等待'):self.store.validate_profile({})
         self.store.active_job=None
         report=self.store.root/'runs'/self.key['runId']/'report.json'
-        report.write_text('{}',encoding='utf-8')
+        report.rename(report.with_suffix('.missing'))
         with self.assertRaises(ProviderError):self.store.validate_profile({})
     def test_restore_reopens_members_and_report_without_credentials_or_overwrite(self):
         (self.store.root/'credentials').mkdir();(self.store.root/'credentials'/'secret.txt').write_text('must-not-export')
@@ -102,7 +105,7 @@ class BackupTests(unittest.TestCase):
         candidate=Store(self.store.root.parent/restored['directory'])
         try:
             self.assertEqual(candidate.members({'listId':self.group['id']})[0]['id'],'000001.SZ')
-            self.assertEqual(candidate.read_report(self.key)['payload']['report']['summary'],'合成报告')
+            self.assertEqual((candidate.root/'runs'/self.key['runId']/'report.json').read_text(encoding='utf-8'),'stored historical report')
         finally:candidate.close()
     def test_tampered_archive_and_path_traversal_rejected_before_restore(self):
         backup=self.store.create_backup({})
@@ -115,7 +118,7 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(self.store.overview()['reports'],1)
     def test_missing_report_prevents_backup(self):
         # Corrupt only a synthetic fixture, preserving the file for inspection.
-        (self.store.root/'runs'/self.key['runId']/'report.json').write_text('{}')
+        report=self.store.root/'runs'/self.key['runId']/'report.json';report.rename(report.with_suffix('.missing'))
         with self.assertRaises(ProviderError):self.store.create_backup({})
     def test_active_tasks_outside_history_page_block_create_and_restore(self):
         backup=self.store.create_backup({})
@@ -159,12 +162,12 @@ class BackupTests(unittest.TestCase):
             self.assertNotIn('synthetic-private-path',error.exception.message)
             self.assertEqual(len(writes),2)
             self.assertTrue(writes[0].is_file())
-            self.assertEqual(self.store.read_report(self.key)['payload']['report']['summary'],'合成报告')
+            self.assertEqual((self.store.root/'runs'/self.key['runId']/'report.json').read_text(encoding='utf-8'),'stored historical report')
             self.assertEqual(backups.digest_file(pathlib.Path(backup['path'])),before)
         restored=self.store.restore_backup({'archive':backup['path']})
         candidate=Store(self.store.root.parent/restored['directory'])
         try:
-            self.assertEqual(candidate.read_report(self.key)['payload']['report']['summary'],'合成报告')
+            self.assertEqual((candidate.root/'runs'/self.key['runId']/'report.json').read_text(encoding='utf-8'),'stored historical report')
             self.assertEqual(candidate.db.execute('PRAGMA integrity_check').fetchone()[0],'ok')
         finally:candidate.close()
 
@@ -260,16 +263,12 @@ class BackupTests(unittest.TestCase):
         encoded=json.dumps({'files':[entry]*backups.MAX_FILES},sort_keys=True).encode('utf8')
         self.assertLess(len(encoded)+1024,backups.MAX_MANIFEST)
         self.assertGreater(backups.MAX_FILES,6000*4+1)
-    def test_daily_snapshot_and_chart_survive_restore(self):
+    def test_daily_snapshot_survives_restore(self):
         daily=[{'ts_code':'000001.SZ','trade_date':'20240102','open':10,'high':11,'low':9,'close':10,'vol':2,'amount':3}]
         factors=[{'ts_code':'000001.SZ','trade_date':'20240102','adj_factor':1}]
         snapshot=self.store.sync_bars({'token':'synthetic','instrumentId':'000001.SZ','start':'20240101','end':'20240131'},lambda token,api,params,fields:daily if api=='daily' else factors)
-        context=self.store.prepare_research({'instrumentIds':['000001.SZ'],'question':'snapshot backup fixture'})
-        params={'runId':context['runId'],'instrumentId':'000001.SZ'}
-        chart=self.store.create_research_chart(params)
         backup=self.store.create_backup({});restored=self.store.restore_backup({'archive':backup['path']})
         candidate=Store(self.store.root.parent/restored['directory'])
         try:
-            self.assertEqual(candidate.create_research_chart(params),chart)
             self.assertEqual(candidate.read_bars({'snapshotId':snapshot['snapshotId'],'adjustment':'none','offset':0})['items'][0]['close'],10)
         finally:candidate.close()

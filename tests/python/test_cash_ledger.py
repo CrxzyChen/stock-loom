@@ -3,7 +3,6 @@ from unittest.mock import patch
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[2]/'apps/data-service'))
 from main import Store
 from provider import ProviderError
-from cash_ledger import migrate_cash_ledger
 class CashTests(unittest.TestCase):
  def setUp(self):
   root=pathlib.Path(__file__).resolve().parents[2]/'.runtime/tests';root.mkdir(parents=True,exist_ok=True)
@@ -42,19 +41,4 @@ class CashTests(unittest.TestCase):
   archive=self.s.create_backup({});restored=self.s.restore_backup({'archive':archive['path']});other=Store(self.root.parent/restored['directory'])
   try:self.assertEqual(other.cash_read({}),before)
   finally:other.close()
- def test_schema9_backup_and_failed_migration_do_not_mutate_original(self):
-  old=self.root/'old'
-  with patch('main.migrate_cash_ledger',lambda *args:None):seed=Store(old)
-  seed.db.execute("INSERT INTO watchlists VALUES ('sentinel','sentinel','2024-01-01')");seed.db.commit();seed.close()
-  real=sqlite3.connect
-  class Broken(sqlite3.Connection):
-   def executescript(self,sql):return super().executescript(sql.replace('CREATE TABLE cash_requests','INVALID SQL cash_requests'))
-  with patch('sqlite3.connect',lambda *a,**kw:real(*a,**kw,factory=Broken)):
-   with self.assertRaises(sqlite3.DatabaseError):Store(old)
-  db=real(old/'stock.sqlite')
-  try:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],9);self.assertEqual(db.execute('SELECT COUNT(*) FROM watchlists').fetchone()[0],1)
-  finally:db.close()
-  reopened=Store(old)
-  try:self.assertEqual(reopened.cash_read({})['state'],'missingBalance');self.assertTrue(list((old/'backups').glob('pre-schema-10-*.sqlite')))
-  finally:reopened.close()
 if __name__=='__main__':unittest.main()

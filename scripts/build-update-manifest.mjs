@@ -10,7 +10,7 @@ const build=JSON.parse(fs.readFileSync('build/package-current.json','utf8'));
 const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;versionParts(version);
 const repo=repository(process.env.STOCK_UPDATE_REPOSITORY??'CrxzyChen/stock-loom');
 const bytes=fs.readFileSync(path.join(build.directory,`Stock-Loom-${version}-x64.exe`));
-const manifest={format:1,version,platform:'win32-x64',minDataSchema:5,maxDataSchema:build.service.schemaVersion??5,size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),notes:fs.readFileSync(notesFile,'utf8')};
+const manifest={format:1,version,platform:'win32-x64',minDataSchema:build.service.schemaVersion,maxDataSchema:build.service.schemaVersion,size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),notes:fs.readFileSync(notesFile,'utf8')};
 validateUpdate(manifest,repo,build.service.schemaVersion??5);
 const privateKey=readReleaseKey(keyFile);if(privateKey.asymmetricKeyType!=='ed25519')throw Error('Update signing requires an Ed25519 key.');
 const envelope={format:2,keyId,payload:manifest,signature:sign(null,updateSigningBytes(repo,manifest),privateKey).toString('base64')};

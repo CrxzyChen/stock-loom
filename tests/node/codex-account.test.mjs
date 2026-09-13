@@ -5,7 +5,7 @@ import {PassThrough,Writable} from 'node:stream';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {CodexAccount,loginUrl} from '../../apps/desktop/src/main/codex-account.mjs';
-import {ResearchRuntime,disabledFeatures} from '../../apps/agent-host/runtime.mjs';
+import {disabledFeatures} from '../../apps/agent-host/runtime.mjs';
 const binary=path.resolve('node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe');
 async function fixture(){
   const home=await fs.mkdtemp(path.resolve('.runtime/tests/codex-account-test-'));
@@ -45,14 +45,4 @@ test('account login, model selection, persistence, cancellation, logout and retr
 test('only official HTTPS login targets can reach the browser',()=>{
   assert.equal(loginUrl('https://auth.openai.com/authorize'),'https://auth.openai.com/authorize');
   for(const url of ['file:///C:/private','http://auth.openai.com','https://auth.openai.com.evil.test','https://user:password@auth.openai.com','https://auth.openai.com:444','javascript:alert(1)'])assert.throws(()=>loginUrl(url));
-});
-test('ChatGPT research runs without an API key and retains sandbox/tool restrictions',async()=>{
-  const home=await fs.mkdtemp(path.resolve('.runtime/tests/chatgpt-runtime-'));let options,threadOptions;
-  class FakeCodex{constructor(value){options=value}startThread(value){threadOptions=value;return {id:'fixture',runStreamed:async()=>({events:(async function*(){yield {type:'item.completed',item:{type:'agent_message',text:JSON.stringify({summary:'fixture',claims:[],limitations:['fixture']})}};yield {type:'turn.completed',usage:{input_tokens:1,cached_input_tokens:0,cache_write_input_tokens:0,output_tokens:1,reasoning_output_tokens:0}}})()})}}}
-  const evidence=JSON.parse(await fs.readFile('validation/codex-readonly-probe.json','utf8'));
-  const runtime=new ResearchRuntime({home,workingDirectory:path.join(home,'work'),binary,evidence,authMode:'chatgpt',model:'fixture',CodexClass:FakeCodex});
-  await runtime.run({question:'fixture',facts:[]});assert.equal(options.apiKey,undefined);assert.equal(options.config.cli_auth_credentials_store,'keyring');assert.equal(options.config.forced_login_method,'chatgpt');assert.equal(options.env.CODEX_HOME,home);
-  for(const name of disabledFeatures)assert.equal(options.config.features[name],false);
-  assert.equal(threadOptions.sandboxMode,'read-only');assert.equal(threadOptions.approvalPolicy,'never');assert.equal(threadOptions.networkAccessEnabled,false);
-  runtime.options.apiKey='should-not-mix';await assert.rejects(runtime.run({question:'fixture',facts:[]}),/连接研究账号/);
 });
