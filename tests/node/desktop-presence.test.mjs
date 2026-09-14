@@ -7,7 +7,7 @@ function fixture(){
   class Tray extends EventEmitter{setToolTip(){}setContextMenu(menu){this.menu=menu}destroy(){this.destroyed=true}isDestroyed(){return !!this.destroyed}}
   class Notification extends EventEmitter{static isSupported(){return true}constructor(options){super();this.options=options;notifications.push(this)}show(){this.shown=true}close(){this.emit('close')}}
   const window={visible:true,minimized:false,isDestroyed:()=>false,isMinimized(){return this.minimized},restore(){this.minimized=false},show(){this.visible=true},hide(){this.visible=false},focus(){this.focused=true},isVisible(){return this.visible}};
-  const presence=new DesktopPresence({Tray,Menu:{buildFromTemplate:items=>items},nativeImage:{createFromBitmap:()=>({isEmpty:()=>false})},Notification,getWindow:()=>window,quit:()=>quits++});
+  const presence=new DesktopPresence({Tray,Menu:{buildFromTemplate:items=>items},nativeImage:{createFromPath:()=>({isEmpty:()=>false})},Notification,getWindow:()=>window,quit:()=>quits++});
   return {presence,window,notifications,quits:()=>quits};
 }
 test('scheduled notification opens its exact conversation and stops after shutdown',()=>{const f=fixture();let opened=0;assert.equal(f.presence.notifyScheduled({title:'task',body:'important change',onClick:()=>opened++}),true);assert.equal(f.notifications[0].options.body,'important change');f.notifications[0].emit('click');assert.equal(opened,1);assert.equal(f.window.visible,true);f.presence.shutdown();assert.equal(f.presence.notifyScheduled({title:'task',body:'ignored'}),false)});
@@ -38,6 +38,6 @@ test('close prompt supports background, exit and cancel without duplicate prompt
  f.presence.show();await f.presence.requestClose({showMessageBox:async()=>({response:1})});assert.equal(f.quits(),1);
 });
 test('failed tray creation leaves window visible and close prompt can retry',async()=>{
- const f=fixture();f.presence.nativeImage.createFromBitmap=()=>({isEmpty:()=>true});
+ const f=fixture();f.presence.nativeImage.createFromPath=()=>({isEmpty:()=>true});
  await assert.rejects(f.presence.requestClose({showMessageBox:async()=>({response:0})}));assert.equal(f.window.visible,true);assert.equal(f.presence.closePrompt,false);
 });

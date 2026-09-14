@@ -1,19 +1,14 @@
 // Native desktop affordances; notification failure never changes a task result.
 export class DesktopPresence{
-  constructor({Tray,Menu,nativeImage,Notification,getWindow,quit}){
-    Object.assign(this,{Tray,Menu,nativeImage,Notification,getWindow,quit});
+  constructor({Tray,Menu,nativeImage,Notification,iconPath,getWindow,quit}){
+    Object.assign(this,{Tray,Menu,nativeImage,Notification,iconPath,getWindow,quit});
     this.tray=null;this.enabled=false;this.exiting=false;this.notices=new Set();
   }
   show(){const window=this.getWindow();if(!window||window.isDestroyed())return;if(window.isMinimized())window.restore();window.show();window.focus()}
   setEnabled(value){
     if(this.exiting)return;
     if(value&&!this.tray){
-      // BGRA pixels: three ascending cyan bars, readable at notification-area size.
-      const pixels=Buffer.alloc(32*32*4);
-      for(const [left,top] of [[5,19],[13,12],[21,5]])for(let y=top;y<27;y++)for(let x=left;x<left+5;x++){
-        const offset=(y*32+x)*4;pixels[offset]=221;pixels[offset+1]=205;pixels[offset+2]=73;pixels[offset+3]=255;
-      }
-      const icon=this.nativeImage.createFromBitmap(pixels,{width:32,height:32,scaleFactor:1});
+      const icon=this.nativeImage.createFromPath(this.iconPath);
       if(icon.isEmpty())throw Error('托盘图标不可用，关闭窗口仍会正常退出。');
       const tray=new this.Tray(icon);
       try{

@@ -1,6 +1,25 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';
 import {TaskScheduler,scheduleSlot,validateTask} from '../../apps/desktop/src/main/task-scheduler.mjs';
 const task={name:'收盘检查',prompt:'检查自选股',frequency:'weekdays',time:'15:30',timezone:'Asia/Shanghai',enabled:true,permissionMode:'ask'};
+test('agent permission edits persist and reach next run; omitted mode preserves existing choice',async()=>{
+ const root=await fs.mkdtemp(path.resolve('.runtime/tests/scheduler-permission-'));const modes=[];
+ const options={file:path.join(root,'tasks.json'),project:async()=>'a',canRun:()=>true,run:async(t,started)=>{modes.push(t.permissionMode);await started('permission-thread')}};
+ const s=new TaskScheduler(options);await s.initialize();
+ const broker=new WorkspaceToolBroker((method,args)=>s.save(args));
+ const save=args=>broker.call({tool:'save_scheduled_task',arguments:args,token:broker.token,runId:broker.runId});
+ try{
+  const {permissionMode,...input}=task;await save(input);const id=(await s.list()).tasks[0].id;
+  assert.equal((await s.list()).tasks[0].permissionMode,'ask');
+  for(const mode of ['full-access','auto-review','ask']){
+   await save({...input,id,permissionMode:mode});await save({...input,id,name:'修改标题'});
+   assert.equal((await s.list()).tasks[0].permissionMode,mode);
+   await s.runNow(id);assert.equal(modes.at(-1),mode);
+   s.event({method:'turn/completed',params:{threadId:'permission-thread',turn:{status:'completed'}}});await s.chain;
+  }
+  await save({...input,id,permissionMode:'auto-review'});
+ }finally{broker.revoke();await s.stop()}
+ const restarted=new TaskScheduler(options);await restarted.initialize();try{assert.equal((await restarted.list()).tasks[0].permissionMode,'auto-review')}finally{await restarted.stop()}
+});
 test('important notifications respect opt-in, current run, persistent dedup and failure isolation',async()=>{
  const root=await fs.mkdtemp(path.resolve('.runtime/tests/notices-'));let count=0,project='a';const options={file:path.join(root,'tasks.json'),project:async()=>project,canRun:()=>true,run:async(t,started)=>started('thread'),notify:()=>{count++;return true}};
  const s=new TaskScheduler(options);await s.initialize();try{assert.equal((await s.notifyCurrent({key:'event',message:'changed'})).status,'noActiveTask');let saved=await s.save(task);await s.runNow(saved.id);assert.equal((await s.notifyCurrent({key:'event',message:'changed'})).status,'muted');saved=await s.save({...task,id:saved.id,notifyEnabled:true});assert.equal((await s.notifyCurrent({key:'event',message:'changed'})).status,'submitted');assert.equal((await s.notifyCurrent({key:'event',message:'changed'})).status,'duplicate');assert.equal(count,1);project='b';assert.equal((await s.notifyCurrent({key:'event2',message:'changed'})).status,'noActiveTask');project='a';await s.stop();
@@ -30,7 +49,7 @@ test('agent scheduler tools share the broker and validate authorization mode',as
  const calls=[],broker=new WorkspaceToolBroker(async(m,p)=>{calls.push({m,p});return {saved:true}});
  const call=(tool,args)=>broker.call({tool,arguments:args,token:broker.token,runId:broker.runId});
  await call('save_scheduled_task',task);assert.equal(calls[0].m,'scheduler.save');await call('list_scheduled_tasks',{});assert.equal(calls[1].m,'scheduler.list');
- await assert.rejects(call('save_scheduled_task',{...task,permissionMode:'full-access'}));broker.revoke();await assert.rejects(call('list_scheduled_tasks',{}));
+ for(const permissionMode of ['auto-review','full-access']){await call('save_scheduled_task',{...task,permissionMode});assert.equal(calls.at(-1).p.permissionMode,permissionMode)}await assert.rejects(call('save_scheduled_task',{...task,permissionMode:'invalid'}));broker.revoke();await assert.rejects(call('list_scheduled_tasks',{}));
 });
 test('30-second interval waits for deadline, skips overlapping/offline slots, and restarts without catch-up',async()=>{
  const root=await fs.mkdtemp(path.resolve('.runtime/tests/scheduler-interval-'));let now=new Date('2026-09-12T00:00:00Z'),count=0;

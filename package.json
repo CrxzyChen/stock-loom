@@ -1,6 +1,6 @@
 {
   "name": "stock-workshop",
-  "version": "0.2.0-beta.7",
+  "version": "0.2.0-beta.8",
   "private": true,
   "description": "Stock Loom · 观市 — local-first A-share workspace with Codex Copilot",
   "author": "CrxzyChen",
@@ -88,6 +88,10 @@
       {
         "from": "node_modules/playwright-core",
         "to": "browser/node_modules/playwright-core"
+      },
+      {
+        "from": "assets/branding",
+        "to": "branding"
       }
     ],
     "asar": true,
@@ -100,14 +104,19 @@
           ]
         }
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true,
+      "icon": "assets/branding/stock-loom.ico",
+      "signExecutable": false
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false,
-      "include": "scripts/installer-running-check.nsh"
+      "include": "scripts/installer-running-check.nsh",
+      "installerIcon": "assets/branding/stock-loom.ico",
+      "uninstallerIcon": "assets/branding/stock-loom.ico",
+      "installerHeaderIcon": "assets/branding/stock-loom.ico"
     },
     "artifactName": "Stock-Loom-${version}-${arch}.${ext}"
   },

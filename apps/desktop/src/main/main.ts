@@ -409,9 +409,10 @@ function registerIPC(){
   handle('stock:service:status',p=>{noParams(p);return serviceStatus()});
   handle('stock:service:retry',async p=>{noParams(p);await service.stop();service.restarts=0;await service.start();return service.status});
 }
+const brandingPath=(file:string)=>path.join(app.isPackaged?path.join(process.resourcesPath,'branding'):path.join(root,'assets/branding'),file);
 async function createWindow(){
   nativeTheme.themeSource='dark';
-  window=new BrowserWindow({width:1440,height:900,minWidth:860,minHeight:600,frame:false,autoHideMenuBar:true,title:'Stock Loom',backgroundColor:'#090b10',show:false,
+  window=new BrowserWindow({width:1440,height:900,minWidth:860,minHeight:600,frame:false,autoHideMenuBar:true,title:'Stock Loom',icon:brandingPath('stock-loom.ico'),backgroundColor:'#090b10',show:false,
     webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true}});
   window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   window.webContents.on('will-navigate',(event,url)=>{if(url!==rendererUrl)event.preventDefault()});
@@ -429,7 +430,7 @@ else{
   app.on('second-instance',()=>presence?.show());
   app.whenReady().then(async()=>{
     app.setAppUserModelId('com.crxzy.stock');
-    presence=new DesktopPresence({Tray,Menu,nativeImage,Notification,getWindow:()=>window,quit:()=>app.quit()});
+    presence=new DesktopPresence({Tray,Menu,nativeImage,Notification,iconPath:brandingPath('stock-loom-tray.png'),getWindow:()=>window,quit:()=>app.quit()});
     updates=new UpdateController({directory:path.join(app.getPath('userData'),'updates'),current:app.getVersion(),getSchema:async()=>(await service.call('overview')).schemaVersion,verify:(file:string,signal:AbortSignal)=>verifyInstallerPublisher(file,process.execPath,{signal,allowUnsigned:true})});
     await updates.initialize();
     updateChecks=new UpdateCheckScheduler(updates);updateChecks.start();
