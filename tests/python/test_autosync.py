@@ -45,7 +45,7 @@ class AutoSyncTests(unittest.TestCase):
     def test_opt_in_cutoff_and_calendar_gates(self):
         self.assertEqual(self.store.autosync_plan({},self.now)['state'],'disabled');self.enable()
         self.assertEqual(self.store.autosync_plan({},self.now)['target'],'20240103')
-        self.assertEqual(self.store.autosync_plan({},self.now.replace(hour=7,minute=29))['target'],'20240102')
+        self.assertEqual(self.store.autosync_plan({},self.now.replace(hour=7,minute=29))['target'],'20240103')
         with self.store.db:self.store.db.execute("UPDATE trading_calendar SET is_open=0 WHERE cal_date='20240103' AND exchange='SZSE'")
         self.assertEqual(self.store.autosync_plan({},self.now)['requests'],[])
         with self.store.db:self.store.db.execute("DELETE FROM trading_calendar WHERE cal_date='20240104'")

@@ -43,6 +43,6 @@ class SectorTests(unittest.TestCase):
   while day.year==2024:
    self.s.db.execute('INSERT INTO trading_calendar VALUES (?,?,?,?)',('SSE',day.strftime('%Y%m%d'),int(day.weekday()<5),(day-dt.timedelta(days=1)).strftime('%Y%m%d')));day+=dt.timedelta(days=1)
   self.s.db.commit();p={'token':self.token,'force':False};now=dt.datetime(2024,2,5,10,tzinfo=dt.timezone.utc)
-  first=self.s.ensure_sectors(p,now);self.assertEqual(first,self.s.ensure_sectors(p,now));args=json.loads(self.s.db.execute('SELECT params FROM jobs WHERE id=?',(first['jobIds'][0],)).fetchone()[0]);self.assertEqual(args['date'],'20240202')
-  second=self.s.ensure_sectors(p,now+dt.timedelta(minutes=30));self.assertNotEqual(first['jobIds'],second['jobIds']);self.s.demand_configure({'enabled':False,'intervalMinutes':60});self.assertEqual(self.s.ensure_sectors(p,now)['state'],'disabled')
+  first=self.s.ensure_sectors(p,now);self.assertEqual(first,self.s.ensure_sectors(p,now));args=json.loads(self.s.db.execute('SELECT params FROM jobs WHERE id=?',(first['jobIds'][0],)).fetchone()[0]);self.assertEqual(args['date'],'20240205')
+  second=self.s.ensure_sectors(p,now+dt.timedelta(minutes=30));self.assertEqual(first['jobIds'],second['jobIds']);self.s.demand_configure({'enabled':False,'intervalMinutes':60});self.assertEqual(self.s.ensure_sectors(p,now)['state'],'disabled')
 if __name__=='__main__':unittest.main()

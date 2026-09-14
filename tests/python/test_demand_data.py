@@ -15,6 +15,9 @@ class DemandTests(unittest.TestCase):
   self.s.db.commit()
  def tearDown(self):self.s.close()
  def ensure(self,**kw):return self.s.demand_ensure(dict(instrumentId='000001.SZ',endpoint='bars',years=1,force=False,token=self.token,**kw),self.now)
+ def test_morning_requests_current_trading_day(self):
+  self.now=dt.datetime(2024,2,5,1,tzinfo=dt.timezone.utc)
+  r=self.ensure();args=json.loads(self.s.db.execute('SELECT params FROM jobs WHERE id=?',(r['jobIds'][0],)).fetchone()[0]);self.assertEqual(args['end'],'20240205')
  def test_calendar_target_dedup_and_disabled(self):
   r=self.ensure();self.assertTrue(matches_rpc_response('demand.ensure',r));self.assertEqual(r['state'],'updating');self.assertEqual(r,self.ensure())
   params=json.loads(self.s.db.execute('SELECT params FROM jobs WHERE id=?',(r['jobIds'][0],)).fetchone()[0]);self.assertEqual(params['start'],'20230205');self.assertEqual(params['end'],'20240205')

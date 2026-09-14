@@ -37,7 +37,7 @@ class AutoSync:
         calendars=self.db.execute("SELECT exchange,is_open FROM trading_calendar WHERE cal_date=? AND exchange IN ('SSE','SZSE')",(today,)).fetchall()
         if len(calendars)!=2 or len({r['is_open'] for r in calendars})!=1:
             return {'state':'waiting','message':'缺少一致的当日沪深交易日历，请先同步日历。','requests':[]}
-        cutoff=now.date() if (now.hour,now.minute)>=(15,30) else now.date()-dt.timedelta(days=1)
+        cutoff=now.date()
         latest=[self.db.execute('SELECT MAX(cal_date) FROM trading_calendar WHERE exchange=? AND is_open=1 AND cal_date<=?',(exchange,cutoff.strftime('%Y%m%d'))).fetchone()[0] for exchange in ('SSE','SZSE')]
         if not latest[0] or latest[0]!=latest[1]:return {'state':'waiting','message':'缺少一致的上一可同步交易日，请补齐日历。','requests':[]}
         target=latest[0];end=dt.datetime.strptime(target,'%Y%m%d').date()

@@ -67,7 +67,7 @@ class BreadthData:
         policy=self.demand_policy({})
         if not policy['enabled'] and not p['force']:return {'state':'disabled','message':'自动更新已关闭','jobIds':[]}
         now=now or dt.datetime.now(dt.timezone.utc);local=now.astimezone(dt.timezone(dt.timedelta(hours=8)))
-        cutoff=local.date() if local.hour>=17 else local.date()-dt.timedelta(days=1)
+        cutoff=local.date()
         for year in sorted({local.year,cutoff.year}):
             first,last=dt.date(year,1,1),dt.date(year,12,31)
             count=self.db.execute("SELECT COUNT(*) FROM trading_calendar WHERE exchange='SSE' AND cal_date BETWEEN ? AND ?",(first.strftime('%Y%m%d'),last.strftime('%Y%m%d'))).fetchone()[0]

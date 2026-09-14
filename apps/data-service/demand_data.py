@@ -34,7 +34,7 @@ class DemandData:
         instrument=self.db.execute('SELECT * FROM instruments WHERE id=?',(p['instrumentId'],)).fetchone()
         if not instrument:raise ProviderError('INSTRUMENT_NOT_FOUND','本地目录没有该股票，请先同步股票目录。')
         now=now or dt.datetime.now(dt.timezone.utc);local=now.astimezone(dt.timezone(dt.timedelta(hours=8)))
-        cutoff=local.date() if (local.hour,local.minute)>=(16,0) else local.date()-dt.timedelta(days=1)
+        cutoff=local.date()
         daily=p['endpoint'] in ('bars','daily_basic')
         listed=dt.date.fromisoformat(instrument['list_date']) if instrument['list_date'] else None
         delisted=dt.date.fromisoformat(instrument['delist_date']) if instrument['delist_date'] else None

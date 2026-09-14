@@ -39,6 +39,14 @@ class BreadthTests(unittest.TestCase):
    if a=='stk_limit':raise ProviderError('PERMISSION','fixture')
    return [{}]*6000 if p['offset']==0 else [{}]*5
   r=fetch_breadth(self.token,'20240202',fetch);self.assertEqual(len(r['daily']),6005);self.assertEqual(r['stk_limit'],[]);self.assertIn(('daily',6000),calls)
+ def test_morning_refresh_requests_today_for_breadth_and_indices(self):
+  d=dt.date(2024,1,1)
+  while d.year==2024:
+   self.s.db.execute('INSERT INTO trading_calendar VALUES (?,?,?,?)',('SSE',d.strftime('%Y%m%d'),int(d.weekday()<5),(d-dt.timedelta(days=1)).strftime('%Y%m%d')));d+=dt.timedelta(days=1)
+  self.s.db.commit()
+  self.s.ensure_breadth({'token':self.token,'force':True},dt.datetime(2024,2,5,1,tzinfo=dt.timezone.utc))
+  for kind,raw in self.s.db.execute('SELECT kind,params FROM jobs'):
+   args=json.loads(raw);self.assertEqual(args['date'] if kind=='breadth.sync' else args['end'],'20240205')
  def test_weekend_calendar_dedup_disabled(self):
   d=dt.date(2024,1,1)
   while d.year==2024:

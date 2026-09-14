@@ -117,6 +117,7 @@ function receive(event:any){
   const p=event.params;
   if(event.method==='serverRequest/resolved'){requests.value=requests.value.filter(r=>r.id!==p?.requestId);return}
   if(event.method==='turn/plan/updated'){threadPlans.set(p.threadId,p);if(p.threadId===threadId.value)plan.value=p}
+  if(p?.threadId&&['turn/started','turn/completed'].includes(event.method)){const thread=threads.value.find(t=>t.id===p.threadId);if(thread)thread.status={type:event.method==='turn/started'?'active':'idle'}}
   if(p?.threadId!==threadId.value)return;
   if(event.method==='thread/goal/updated'){goalGeneration++;goal.value=p.goal;return}
   if(event.method==='thread/goal/cleared'){goalGeneration++;goal.value=null;return}
@@ -199,13 +200,13 @@ onBeforeUnmount(()=>{scrollObserver?.disconnect();cancelAnimationFrame(scrollFra
         <strong v-if="historyOpen">会话</strong>
         <button class="history-icon" :aria-label="historyOpen?'收起历史会话':'展开历史会话'" :title="historyOpen?'收起历史会话':'展开历史会话'" :aria-expanded="historyOpen" aria-controls="copilot-history-list" @click="toggleHistory"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M6 8h6M6 12h6"/></svg></button>
       </div>
-      <button class="history-new" :class="{'history-icon':!historyOpen}" :disabled="busy||running" aria-label="新对话" title="新对话" @click="action(create)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span v-if="historyOpen">新对话</span></button>
+      <button class="history-new" :class="{'history-icon':!historyOpen}" :disabled="busy" aria-label="新对话" title="新对话" @click="action(create)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span v-if="historyOpen">新对话</span></button>
       <template v-if="historyOpen">
         <div class="history-label"><span>历史会话</span><UiButton icon="refresh" icon-only class="text-button" :disabled="busy" @click="action(()=>loadHistory())">刷新</UiButton></div>
         <nav id="copilot-history-list" aria-label="选择对话" :aria-busy="historyLoading">
           <p v-if="historyLoading" class="history-empty" role="status">加载中…</p>
           <p v-else-if="!threads.length" class="history-empty">暂无历史会话</p>
-          <button v-for="t in threads" :key="t.id" class="history-thread" :aria-current="threadId===t.id?'true':undefined" :disabled="busy||running" :title="t.name||t.preview||'新对话'" @click="action(()=>open(t.id))"><span>{{t.name||t.preview||'新对话'}}</span><small v-if="threadDate(t)">{{threadDate(t)}}</small></button>
+          <button v-for="t in threads" :key="t.id" class="history-thread" :aria-current="threadId===t.id?'true':undefined" :disabled="busy" :title="t.name||t.preview||'新对话'" @click="action(()=>open(t.id))"><span>{{t.name||t.preview||'新对话'}}</span><small v-if="t.status?.type==='active'">运行中</small><small v-else-if="threadDate(t)">{{threadDate(t)}}</small></button>
           <UiButton icon="chevron" icon-only v-if="listCursor" class="history-more text-button" :disabled="busy" @click="action(()=>loadHistory(true))">更多对话</UiButton>
         </nav>
       </template>

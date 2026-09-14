@@ -134,7 +134,7 @@ class SectorData:
 
     def sector_target(self,p,now):
         local=now.astimezone(dt.timezone(dt.timedelta(hours=8)))
-        cutoff=local.date() if (local.hour,local.minute)>=(18,30) else local.date()-dt.timedelta(days=1)
+        cutoff=local.date()
         for year in sorted({cutoff.year,local.year}):
             first,last=dt.date(year,1,1),dt.date(year,12,31)
             count=self.db.execute("SELECT COUNT(*) FROM trading_calendar WHERE exchange='SSE' AND cal_date BETWEEN ? AND ?",(first.strftime('%Y%m%d'),last.strftime('%Y%m%d'))).fetchone()[0]
