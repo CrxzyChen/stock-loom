@@ -2,10 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import {execFileSync} from 'node:child_process';
 import {ServiceClient} from '../../apps/desktop/src/main/service-client.mjs';
 
 const root=path.resolve('.runtime/tests');fs.mkdirSync(root,{recursive:true});
 function client(){return new ServiceClient(path.resolve('.venv312/Scripts/python.exe'),[path.resolve('apps/data-service/main.py'),'--data-dir',fs.mkdtempSync(path.join(root,'client-'))])}
+
+test('schema 9 startup reports its domain error through RPC without changing the database',async()=>{
+  const c=client(),file=path.join(c.args.at(-1),'stock.sqlite');
+  execFileSync(c.command,['-c','import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("CREATE TABLE sentinel(value TEXT)"); c.execute("PRAGMA user_version=9"); c.commit(); c.close()',file],{windowsHide:true});
+  const before=fs.readFileSync(file);
+  try{await assert.rejects(c.start(),error=>error.code==='SCHEMA_UNSUPPORTED'&&/9.*10/.test(error.message))}finally{await c.stop()}
+  assert.deepEqual(fs.readFileSync(file),before);
+});
 
 test('handshake, concurrent calls, domain error and orderly exit',async()=>{
   const c=client();

@@ -1,4 +1,5 @@
 import {bindSchedulerPower} from './scheduler-power.mjs';
+import {reportStartupFailure} from './startup-failure.mjs';
 import {AccountUsage} from './account-usage.mjs';
 import {externalLink} from './external-links.mjs';
 import {browserToolsStatus,saveBrowserTools,browserToolOptions} from './browser-tools-settings.mjs';
@@ -483,7 +484,10 @@ else{
     const unbindSchedulerPower=bindSchedulerPower(powerMonitor,taskScheduler);
     app.once('before-quit',unbindSchedulerPower);
     powerMonitor.on('resume',()=>{void tickAutoSync()});
-  }).catch(()=>app.quit());
+  }).catch(async(error)=>{
+    await service?.stop().catch(()=>{});
+    await reportStartupFailure(error,{showMessageBox:(options:Electron.MessageBoxOptions)=>dialog.showMessageBox(options),openExternal:(url:string)=>shell.openExternal(url),quit:()=>app.quit()});
+  });
   app.on('window-all-closed',()=>app.quit());
   app.on('before-quit',event=>{if(quitting)return;event.preventDefault();if(windowDraftBlocked){presence?.show();return}quitting=true;void updateChecks?.stop();void taskScheduler?.stop();autoSync?.stop();clearInterval(autoSyncTimer);presence?.shutdown();credentialStore.clearSession();codexAccount?.stop();void shutdownResources([()=>Promise.allSettled([taskScheduler?.chain,codexSandbox?.stop(),maintenanceDone,updates?.shutdown(),autoSync?.pending]),()=>copilot?.stop(),()=>service?.stop(),()=>processGuard?.stop()]).finally(()=>app.quit())});
 }

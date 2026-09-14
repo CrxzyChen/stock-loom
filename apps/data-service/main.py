@@ -64,7 +64,7 @@ class Store(CashLedger, LedgerImport, ReferenceData, PositionLedger, Announcemen
         self.db.row_factory = sqlite3.Row
         version = self.db.execute('PRAGMA user_version').fetchone()[0]
         if version not in (0, SCHEMA_VERSION):
-            raise DomainError('SCHEMA_UNSUPPORTED', '此资料库版本不受支持，请使用对应版本应用打开；原资料未修改。')
+            raise DomainError('SCHEMA_UNSUPPORTED', f'本地资料库版本为 {version}，当前应用仅支持 {SCHEMA_VERSION}；原资料未修改。')
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA foreign_keys=ON')
         if version == 0:
@@ -216,7 +216,19 @@ class Store(CashLedger, LedgerImport, ReferenceData, PositionLedger, Announcemen
 
 
 def serve(root):
-    store = Store(root)
+    try:
+        store = Store(root)
+    except DomainError as error:
+        # The desktop awaits a health response; stderr is deliberately private.
+        # Report a startup domain failure through that same bounded RPC channel.
+        line = sys.stdin.buffer.readline(MAX_REQUEST + 1)
+        try:
+            request = json.loads(line) if len(line) <= MAX_REQUEST else None
+        except (ValueError, UnicodeDecodeError):
+            request = None
+        if isinstance(request, dict) and request.get('method') == 'health' and isinstance(request.get('requestId'), str) and 1 <= len(request['requestId']) <= 100:
+            print(json.dumps({'requestId': request['requestId'], 'dataAsOf': None, 'sourceVersion': None, 'error': {'code': error.code, 'message': error.message}}, ensure_ascii=False), flush=True)
+        return
     inbox=queue.Queue(maxsize=32)
     def read_input():
         while True:
