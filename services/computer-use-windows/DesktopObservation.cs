@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
 
@@ -28,6 +29,8 @@ internal sealed class DesktopObservation : IDisposable
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint hwnd,out uint processId);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetWindowText(nint hwnd,System.Text.StringBuilder text,int count);
     [DllImport("user32.dll")] private static extern bool IsWindow(nint hwnd);
+    [DllImport("kernel32.dll",SetLastError=true)] private static extern SafeProcessHandle OpenProcess(uint access,bool inherit,uint processId);
+    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] private static extern bool QueryFullProcessImageNameW(SafeProcessHandle process,uint flags,System.Text.StringBuilder name,ref uint size);
     [DllImport("user32.dll")] private static extern bool ShowWindowAsync(nint hwnd,int command);
     [DllImport("user32.dll")] private static extern bool SetProcessDpiAwarenessContext(nint context);
     public static void ConfigureDpi()=>SetProcessDpiAwarenessContext((nint)(-4));
@@ -72,7 +75,14 @@ internal sealed class DesktopObservation : IDisposable
         var started=process.StartTime.ToUniversalTime().Ticks;
         var title=new System.Text.StringBuilder(1024);GetWindowText(hwnd,title,title.Capacity);
         string? executable=null;
-        try {executable=process.MainModule?.FileName;}catch(System.ComponentModel.Win32Exception){}
+        // Querying image identity does not require reading target process memory.
+        // MainModule requests stronger access and can hide elevated applications.
+        using(var handle=OpenProcess(0x1000,false,pid)){
+            if(!handle.IsInvalid){
+                var image=new System.Text.StringBuilder(32768);uint size=(uint)image.Capacity;
+                if(QueryFullProcessImageNameW(handle,0,image,ref size))executable=image.ToString();
+            }
+        }
         return new WindowRef($"{pid}:{started}:{hwnd}",(int)pid,started.ToString(System.Globalization.CultureInfo.InvariantCulture),hwnd.ToInt64(),title.ToString(),executable);
     }
 
