@@ -8,6 +8,10 @@ export type DesktopResearchReport = ResearchReport & {provenance:RpcMetadata & {
 export interface ProviderSettings {name:string;baseUrl:string;model:string;apiKey:string}
 export interface ProviderStatus {name:string;baseUrl:string;model:string;configured:boolean;hasKey:boolean;encrypted:boolean}
 export interface DesktopBridge {
+  desktopToolsStatus():Promise<{enabled:boolean;available:boolean;message:string;apps:{name:string;executable:string}[];sessions:{id:string;threadId:string|null;state:string;target:string|null}[]}>;
+  desktopToolsCandidates():Promise<{id:string;title:string;name:string;authorized:boolean}[]>;
+  desktopToolsChange(value:{action:'enable'|'grant'|'revoke'|'stop';value:boolean|string}):Promise<void>;
+  onDesktopToolsChanged(handler:()=>void):()=>void;
   referenceCatalog():Promise<import('./generated').ReferenceCatalog>;
   readReference(p:import('./generated').ReferenceReadRequest):Promise<import('./generated').ReferencePage>;
   syncReference(p:import('./generated').ReferenceParams):Promise<import('./generated').ReferenceSyncResult>;

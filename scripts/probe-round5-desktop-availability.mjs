@@ -1,0 +1,13 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+const build=JSON.parse(await fs.readFile('build/computer-use-current.json','utf8'));
+const command=path.join(build.native,'StockLoom.ComputerUse.exe');
+const directory=await fs.mkdtemp(path.resolve('.runtime/round5-desktop-availability-'));
+const {stdout}=await promisify(execFile)(command,['--probe-desktop-isolation'],{windowsHide:true,timeout:10000});
+const result=JSON.parse(stdout);assert.equal(result.passed,true);assert.equal(result.privateDesktopRejected,true);assert.equal(result.threadDesktopRestored,true);
+const evidence={...result,commandSha256:createHash('sha256').update(await fs.readFile(command)).digest('hex'),actualLockScreenTested:false,actualRemoteDisconnectTested:false};
+await fs.writeFile(path.join(directory,'result.json'),JSON.stringify(evidence,null,2));console.log(JSON.stringify({directory,...evidence}));

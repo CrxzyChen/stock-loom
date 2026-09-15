@@ -61,6 +61,8 @@ for(const [directory,entry] of Object.entries(lock.packages)){
 }
 const python=spawnSync(path.resolve('.venv312/Scripts/python.exe'),[path.resolve('scripts/python-license-inventory.py')],{encoding:'utf8',windowsHide:true});
 if(python.status!==0)throw Error('Python license inventory failed');items.push(...JSON.parse(python.stdout));
+const desktopNative=spawnSync(path.resolve('.venv312/Scripts/python.exe'),[path.resolve('scripts/computer-use-license-inventory.py')],{encoding:'utf8',windowsHide:true});
+if(desktopNative.status!==0)throw Error('Computer Use license inventory failed: '+desktopNative.stderr);items.push(...JSON.parse(desktopNative.stdout));
 items.push({name:'Electron + Chromium',version:fs.readFileSync('node_modules/electron/dist/version','utf8').trim(),scope:'runtime',license:'See bundled texts',files:['LICENSE','LICENSES.chromium.html'].map(file=>({path:'node_modules/electron/dist/'+file,text:fs.readFileSync('node_modules/electron/dist/'+file,'utf8')}))});
 const output=path.resolve('build/notices');fs.mkdirSync(path.join(output,'texts'),{recursive:true});
 const native=spawnSync(path.resolve('.venv312/Scripts/python.exe'),[path.resolve('scripts/native-runtime-inventory.py')],{encoding:'utf8',windowsHide:true});

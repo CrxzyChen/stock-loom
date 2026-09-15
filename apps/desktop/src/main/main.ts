@@ -1,4 +1,6 @@
 import {bindSchedulerPower} from './scheduler-power.mjs';
+import {openDesktopTools} from './desktop-tools-host.mjs';
+let desktopTools:Awaited<ReturnType<typeof openDesktopTools>>;
 import {reportStartupFailure} from './startup-failure.mjs';
 import {AccountUsage} from './account-usage.mjs';
 import {externalLink} from './external-links.mjs';
@@ -319,6 +321,13 @@ function registerIPC(){
   handle('stock:native-config:write',p=>accountChange(()=>nativeConfig().write(p)));
   const toolPath=(name:string)=>app.isPackaged?path.join(process.resourcesPath,'tools',name):path.join(root,'dist/tools',name);
   handle('stock:browser:status',p=>{noParams(p);return browserToolsStatus(app.getPath('userData'),browserEntry())});
+  handle('stock:desktop-tools:status',p=>{noParams(p);return desktopTools.status()});
+  handle('stock:desktop-tools:candidates',p=>{noParams(p);return desktopTools.controller.candidates()});
+  handle('stock:desktop-tools:change',async p=>{
+    if(!p||typeof p!=='object'||!['enable','grant','revoke','stop'].includes(p.action)||Object.keys(p).some(k=>!['action','value'].includes(k)))throw Error('电脑操作设置无效。');
+    if(p.action==='enable'){if(typeof p.value!=='boolean'||p.value&&!desktopTools.status().available)throw Error('电脑操作组件尚未就绪。');await desktopTools.controller.enable(p.value)}
+    else{if(typeof p.value!=='string'||p.value.length>1024)throw Error('应用或会话无效。');if(p.action==='grant')await desktopTools.controller.grant(p.value);else if(p.action==='revoke')await desktopTools.controller.revoke(p.value);else await desktopTools.controller.stop(p.value)}
+  });
   handle('stock:browser:save',p=>accountChange(()=>saveBrowserTools(app.getPath('userData'),p)));
   handle('stock:tools:status',p=>{noParams(p);return stockToolsStatus(app.getPath('userData'),toolPath('workspace-mcp-server.mjs'),toolPath('workspace-cli.mjs'),service.status.state)});
   handle('stock:tools:save',p=>accountChange(async()=>{await saveStockTools(app.getPath('userData'),p);return {enabled:p}}));
@@ -451,6 +460,8 @@ else{
     try{const mode=JSON.parse(await fs.readFile(authPreference(),'utf8'));if(mode==='custom')researchAuthMode=mode}catch{}
     codexAccount.onChange=()=>{accountUsage.invalidate();if(window&&!window.isDestroyed())window.webContents.send('stock:account:usage-changed')};
     codexSandbox=new CodexSandbox({options:async()=>{const evidence=JSON.parse(await fs.readFile(app.isPackaged?path.join(process.resourcesPath,'codex-readonly-probe.json'):path.join(root,'validation/codex-readonly-probe.json'),'utf8'));return {binary:codexBinary,binarySha256:evidence.binarySha256,home:codexAccount.home,cwd:(await copilot.location()).path,experimentalApi:true,config:['cli_auth_credentials_store=\"keyring\"'],protect:(child:any)=>processGuard.protect(child)}}});
+    desktopTools=await openDesktopTools({directory:app.getPath('userData'),root,resources:process.resourcesPath,packaged:app.isPackaged,command:process.execPath,protect:(child:any)=>processGuard.protect(child),validateThread:(id:string)=>!!copilot?.session?.known.has(id),publish:()=>{if(desktopTools?.status().enabled)app.setAccessibilitySupportEnabled(true);if(window&&!window.isDestroyed())window.webContents.send('stock:desktop-tools:changed')}});
+    if(desktopTools.status().enabled)app.setAccessibilitySupportEnabled(true);
     copilot=new CopilotWorkspace({directory:path.join(app.getPath('userData'),'stock-project'),
       switchProject:async(folder:string)=>{const overview=await projectData.switch(folder,service);try{autoSync.reset();if(overview)presence.setEnabled(overview.settings.closeToTray)}catch{/* The committed project/data association remains authoritative. */}},
       chooseDirectory:async()=>{const result=await dialog.showOpenDialog({title:'打开股票项目',properties:['openDirectory']});return result.canceled?null:result.filePaths[0]},
@@ -461,11 +472,12 @@ else{
         const auth=researchAuthMode==='chatgpt'?await codexAccount.config():await credentialStore.readProvider();
         const custom=researchAuthMode==='custom'?providerOptions(auth):null;
         const bridge=app.isPackaged?path.join(process.resourcesPath,'tools/workspace-mcp-server.mjs'):path.join(root,'dist/tools/workspace-mcp-server.mjs');
+        await desktopTools.prepareProject((await copilot.location()).path);
         const browser=await browserToolOptions({directory:app.getPath('userData'),project:(await copilot.location()).path,command:process.execPath,entry:browserEntry()});
         const tools=await openStockTools(await readStockTools(app.getPath('userData')),{command:process.execPath,bridge,callService:(method:string,params:any)=>{if(maintenance)throw Error('正在维护资料。');if(method==='scheduler.notify')return taskScheduler.notifyCurrent(params);if(method==='scheduler.list')return taskScheduler.list();if(method==='scheduler.save')return taskScheduler.save(params);if(method==='scheduler.remove')return taskScheduler.remove(params.id);return service.call(method,params,20000)},enqueueSync:async(kind:string,params:any)=>{if(maintenance||quitting)throw Error('资料正在维护。');const token=await dataToken();if(maintenance||quitting)throw Error('资料正在维护。');return service.call('jobs.enqueue',{kind,params,token})}});
         return {binary:codexBinary,binarySha256:evidence.binarySha256,home:codexAccount.home,experimentalApi:true,
-          config:['cli_auth_credentials_store="keyring"',...(custom?custom.config:[`forced_login_method="${researchAuthMode}"`]),...tools.config,...browser.config],
-          env:{...(custom?.env??{}),...tools.env,...browser.env},releaseTools:tools.releaseTools,
+          config:['cli_auth_credentials_store="keyring"',...(custom?custom.config:[`forced_login_method="${researchAuthMode}"`]),...tools.config,...browser.config,...desktopTools.options.config],
+          env:{...(custom?.env??{}),...tools.env,...browser.env,...desktopTools.options.env},releaseTools:tools.releaseTools,
           protect:(child:any)=>processGuard.protect(child),threadOptions:{model:auth.model,modelProvider:custom?'stock_custom':'openai',...policyThreadOptions(await readCopilotPolicy(app.getPath('userData')))}};
       }});
     if(projectState){copilot.project=await fs.realpath(projectState.activeProject);await fs.access(path.join(projectData.current(),'stock.sqlite'))}
@@ -490,7 +502,7 @@ else{
     await reportStartupFailure(error,{showMessageBox:(options:Electron.MessageBoxOptions)=>dialog.showMessageBox(options),openExternal:(url:string)=>shell.openExternal(url),quit:()=>app.quit()});
   });
   app.on('window-all-closed',()=>app.quit());
-  app.on('before-quit',event=>{if(quitting)return;event.preventDefault();if(windowDraftBlocked){presence?.show();return}quitting=true;void updateChecks?.stop();void taskScheduler?.stop();autoSync?.stop();clearInterval(autoSyncTimer);presence?.shutdown();credentialStore.clearSession();codexAccount?.stop();void shutdownResources([()=>Promise.allSettled([taskScheduler?.chain,codexSandbox?.stop(),maintenanceDone,updates?.shutdown(),autoSync?.pending]),()=>copilot?.stop(),()=>service?.stop(),()=>processGuard?.stop()]).finally(()=>app.quit())});
+  app.on('before-quit',event=>{if(quitting)return;event.preventDefault();if(windowDraftBlocked){presence?.show();return}quitting=true;void updateChecks?.stop();void taskScheduler?.stop();autoSync?.stop();clearInterval(autoSyncTimer);presence?.shutdown();credentialStore.clearSession();codexAccount?.stop();void shutdownResources([()=>Promise.allSettled([taskScheduler?.chain,codexSandbox?.stop(),maintenanceDone,updates?.shutdown(),autoSync?.pending]),()=>copilot?.stop(),()=>desktopTools?.close(),()=>service?.stop(),()=>processGuard?.stop()]).finally(()=>app.quit())});
 }
 
 

@@ -75,6 +75,13 @@ function beforeUnload(event:BeforeUnloadEvent){if(draftError.value&&(draft.value
 watch(draft,persistDraft,{flush:'sync'});
 function remember(){try{localStorage.setItem('stock:copilot:selected:'+project.value,threadId.value)}catch{/* Optional view state; Codex owns the actual history. */}}
 async function action(fn:()=>Promise<void>){if(busy.value)return;busy.value=true;error.value='';try{await fn()}catch(e){error.value=connectionError(e,'model')}finally{busy.value=false}}
+let scheduledNavigation:{threadId:string;turnId?:string}|null=null;
+async function openScheduled(){
+ if(busy.value||!scheduledNavigation)return;
+ const target=scheduledNavigation;scheduledNavigation=null;
+ await action(async()=>{await open(target.threadId);if(target.turnId&&threadId.value===target.threadId)await locateTurn(target.turnId)});
+}
+watch(busy,value=>{if(!value)void openScheduled()});
 function composerKeydown(event:KeyboardEvent){
   if(event.key!=='Enter'||event.shiftKey||event.isComposing||event.keyCode===229)return;
   event.preventDefault();
@@ -107,7 +114,7 @@ async function send(){if(!api||running.value||(!draft.value.trim()&&!attachments
 if(!threadId.value)await create();const text=draft.value,files=[...attachments.value];const result=await api.copilotSend(threadId.value,text,{...(model.value?{model:model.value}:{}),...((effort.value||models.value.find(m=>m.model===model.value)?.defaultReasoningEffort)?{effort:effort.value||models.value.find(m=>m.model===model.value).defaultReasoningEffort}:{}),mode:mode.value,permissionMode:permissionMode.value,attachments:files.map(f=>f.id)});items.value.push({id:`local-${Date.now()}`,type:'userMessage',content:[{text:[text,...files.map(f=>'附件：'+f.name)].filter(Boolean).join('\n')}]});draft.value='';attachments.value=[];running.value=result.turn?.status==='inProgress'}
 
 function receive(event:any){
-  if(event.kind==='openScheduledThread'){void action(async()=>{await open(event.threadId);if(event.turnId&&threadId.value===event.threadId)await locateTurn(event.turnId)});return}
+  if(event.kind==='openScheduledThread'){scheduledNavigation={threadId:event.threadId,turnId:event.turnId};void openScheduled();return}
   if(event.kind==='policyChanged'){defaultApproval.value=event.policy.mode;permissionMode.value=event.policy.mode;return}
   if(event.kind==='modelsChanged'){modelGeneration++;manualModel.value=false;model.value='';effort.value='';models.value=[];void loadModels();return}
   if(event.kind==='projectChanged'){permissionMode.value=defaultApproval.value;draftReady=false;project.value=event.path;threadId.value='';threads.value=[];items.value=[];requests.value=[];restoreDraft();error.value='';running.value=false;historyUnavailable.value=false;historyCursor.value=null;listCursor.value=null;historyLoaded.value=false;if(historyOpen.value)void action(()=>loadHistory());return}

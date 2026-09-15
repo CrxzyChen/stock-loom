@@ -67,7 +67,9 @@ export class CodexAccount{
     this.refreshing=this.readAccount().catch(error=>{this.state.connected=false;this.state.error=error.message;throw error}).finally(()=>{this.refreshing=null});return this.refreshing;
   }
   async readAccount(){
-    await this.start();const result=await this.request('account/read',{refreshToken:true});
+    // Reading connection state must not force an OAuth refresh on every UI read.
+    // Codex owns refresh during normal authenticated requests.
+    await this.start();const result=await this.request('account/read',{refreshToken:false});
     this.state.connected=result?.account?.type==='chatgpt';this.state.error='';
     if(this.state.connected){
       const models=[];let cursor=null;

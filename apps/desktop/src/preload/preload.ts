@@ -1,6 +1,10 @@
 import {contextBridge,ipcRenderer} from 'electron';
 import type {DesktopBridge} from '../../../../packages/contracts/desktop';
 const bridge:DesktopBridge={
+  desktopToolsStatus:()=>ipcRenderer.invoke('stock:desktop-tools:status'),
+  desktopToolsCandidates:()=>ipcRenderer.invoke('stock:desktop-tools:candidates'),
+  desktopToolsChange:value=>ipcRenderer.invoke('stock:desktop-tools:change',value),
+  onDesktopToolsChanged:handler=>{const listener=()=>handler();ipcRenderer.on('stock:desktop-tools:changed',listener);return ()=>ipcRenderer.removeListener('stock:desktop-tools:changed',listener)},
   browserToolsStatus:()=>ipcRenderer.invoke('stock:browser:status'),
   saveBrowserTools:enabled=>ipcRenderer.invoke('stock:browser:save',enabled),
   accountUsage:()=>ipcRenderer.invoke('stock:account:usage'),

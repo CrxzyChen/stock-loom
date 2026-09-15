@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "stock-loom-desktop",
+  "version": "0.1.0",
+  "displayName": "电脑操作",
+  "license": "MIT",
+  "platforms": ["win32-x64"],
+  "hostProtocol": 1,
+  "entry": "host-stdio.mjs",
+  "capabilities": ["windows.observe", "windows.capture", "windows.input"]
+}

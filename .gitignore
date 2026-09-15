@@ -10,6 +10,10 @@ release/
 build/service/
 build/pyinstaller/
 .runtime/
+services/computer-use-windows/bin/
+services/computer-use-windows/obj/
+tests/windows/ComputerUseFixture/bin/
+tests/windows/ComputerUseFixture/obj/
 __pycache__/
 *.pyc
 .env

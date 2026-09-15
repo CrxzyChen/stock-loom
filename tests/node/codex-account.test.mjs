@@ -35,6 +35,7 @@ test('account login, model selection, persistence, cancellation, logout and retr
     await f.account.select('test-a');assert.equal(JSON.parse(await fs.readFile(path.join(f.account.home,'stock-model.json'),'utf8')),'test-a');
     await assert.rejects(f.account.select('arbitrary-model'));
     const config=await f.account.config();assert.equal(config.authMode,'chatgpt');assert.equal(config.model,'test-a');assert.equal(config.apiKey,undefined);
+    assert.ok(f.calls.filter(x=>x.method==='account/read').every(x=>x.params.refreshToken===false));
     assert.equal(f.launch.options.env.OPENAI_API_KEY,undefined);assert.equal(f.launch.options.env.CODEX_HOME,f.account.home);assert.ok(f.launch.args.includes('cli_auth_credentials_store="keyring"'));
     await f.account.logout();assert.equal(f.account.snapshot().connected,false);await assert.rejects(f.account.config());
     await f.account.login();await f.account.cancel();assert.equal(f.account.snapshot().pending,false);assert.ok(f.calls.some(x=>x.method==='account/login/cancel'));

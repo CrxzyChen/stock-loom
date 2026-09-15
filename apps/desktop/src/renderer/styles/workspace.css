@@ -72,3 +72,11 @@
 .round2-shell .history-toolbar{height:34px;min-height:34px;padding:2px 8px}
 .round2-shell .conversation-header .ui-icon-only,.round2-shell .history-toolbar .ui-icon-only{width:28px;min-width:28px;height:28px;min-height:28px;padding:5px}
 .round2-shell .scheduler-tabs button{height:32px;min-height:32px;padding:4px 10px}
+
+/* Reserve a thin horizontal scrollbar inside the fixed-height tab strip. */
+.round2-shell .tabs-header .work-tabs{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;align-items:flex-start}
+.round2-shell .tabs-header .work-tabs::-webkit-scrollbar{height:4px}
+.round2-shell .tabs-header .work-tabs::-webkit-scrollbar-thumb{border:0;border-radius:2px}
+.round2-shell .tabs-header .work-tab{height:29px;min-height:0}
+.round2-shell .tabs-header .work-tab button{height:27px;min-height:0;padding-block:0}
+.round2-shell .tabs-header .work-tab .ui-icon-only{height:27px;min-height:0;padding:4px}

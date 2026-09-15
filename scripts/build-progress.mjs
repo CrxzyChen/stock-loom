@@ -5,9 +5,9 @@ import vm from 'node:vm';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const docs=path.join(root,'docs');
-const round=process.argv.includes('--round1')?1:process.argv.includes('--round2')?2:process.argv.includes('--round3')?3:4;
-const round2=round===2,round3=round===3,round4=round===4;
-const planFile=round4?'round4-plan.json':round3?'round3-plan.json':round2?'round2-plan.json':'mvp-plan.json';
+const round=process.argv.includes('--round1')?1:process.argv.includes('--round2')?2:process.argv.includes('--round3')?3:process.argv.includes('--round4')?4:5;
+const round2=round===2,round3=round===3,round4=round===4,round5=round===5;
+const planFile=round5?'round5-plan.json':round4?'round4-plan.json':round3?'round3-plan.json':round2?'round2-plan.json':'mvp-plan.json';
 const plan=JSON.parse(fs.readFileSync(path.join(docs,planFile),'utf8').replace(/^\uFEFF/,''));
 const labels={todo:'待开始',doing:'进行中',review:'待验收',blocked:'受阻',deferred:'已暂缓',done:'已完成'};
 const tasks=plan.phases.flatMap(p=>p.tasks);
@@ -61,14 +61,15 @@ if(round3){md=md.slice(0,md.indexOf('\n## 发布门槛')).replaceAll('Stock MVP'
 if(round3&&plan.acceptance?.status==='accepted'){md=md.slice(0,md.indexOf('\n\n## Beta 发布门槛'))+'\n\n## Round 3 验收\n\n- [x] 2026-09-13 用户确认本轮验收通过，v0.1.0-beta.1 已交付。\n\n原任务计数为技术证据快照；未完成项转入后续跟进，未执行测试不标记通过。详见 [验收记录](round3-acceptance.md)。\n';}
 
 if(round4){md=md.slice(0,md.indexOf('\n## 发布门槛')).replaceAll('Stock MVP','Stock Loom Round 4').replaceAll('mvp-plan.json','round4-plan.json').replaceAll('mvp-development.md','round4-development.md');md+='\n\n## 核心交付验收\n\n- ['+checked(['U-04'])+'] 首次手动引导和后续真实应用内升级、数据保留通过。\n- ['+checked(['W-04','R-05'])+'] 浏览网页、保存项目资料、引用预览及股票信息旅程通过。\n- ['+checked(['D-04'])+'] 版本资产、许可和兼容说明齐备。\n\n日常增强可分批交付，未完成项不标通过。异机测试继续暂缓；不要求盈利前购买商业证书。\n';}
-const template=fs.readFileSync(path.join(docs,'progress',round4?'round4-template.html':round3?'round3-template.html':round2?'round2-template.html':'template.html'),'utf8');
+if(round5){md=md.slice(0,md.indexOf('\n## 发布门槛')).replaceAll('Stock MVP','Stock Loom Round 5').replaceAll('mvp-plan.json','round5-plan.json').replaceAll('mvp-development.md','round5-development.md');md+='\n\n## 验收边界\n\n所有任务须附实现和测试证据。技术探针和用户验收分别记录。异机测试、商业签名暂缓；发布另行授权。\n';}
+const template=fs.readFileSync(path.join(docs,'progress',round5?'round5-template.html':round4?'round4-template.html':round3?'round3-template.html':round2?'round2-template.html':'template.html'),'utf8');
 assert(template.includes('__PLAN_JSON__'),'缺少数据插槽');
 const html=template.replace('__PLAN_JSON__',JSON.stringify(plan).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029'));
 for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)){
   if(match[0].includes('type="application/json"'))continue;
   new vm.Script(match[1]);
 }
-const outputs=[[path.join(docs,round4?'round4-checklist.md':round3?'round3-checklist.md':round2?'round2-checklist.md':'mvp-checklist.md'),md],[path.join(docs,'progress','dist',round4?'index.html':round3?'round3.html':round2?'round2.html':'round1.html'),html]];
+const outputs=[[path.join(docs,round5?'round5-checklist.md':round4?'round4-checklist.md':round3?'round3-checklist.md':round2?'round2-checklist.md':'mvp-checklist.md'),md],[path.join(docs,'progress','dist',round5?'index.html':round4?'round4.html':round3?'round3.html':round2?'round2.html':'round1.html'),html]];
 for(const [,href] of html.matchAll(/href="([^"]+)"/g)){
   if(href.startsWith('#')||href.startsWith('data:'))continue;
   assert(!/^https?:/.test(href),'离线看板不应依赖远程资源');
